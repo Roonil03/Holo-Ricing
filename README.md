@@ -1,4 +1,4 @@
-# Holo-Rice
+# Holo-Ricing
 
 **A Linux customization project themed around Hololive VTubers**
 
@@ -34,7 +34,7 @@ This repository contains themed customization scripts for various Hololive chara
 
 ### Root Directory Scripts
 
-#### `gitConfid.sh` - Git Environment Configuration
+#### `gitConfig.sh` - Git Environment Configuration
 
 Core Functionality:
 
@@ -90,7 +90,7 @@ This script is specifically designed for new Linux users who want to quickly tra
 ### Quick Setup
 1. Clone this repository:
    ```bash
-   git clone https://github.com/roonil03/holo-rice.git
+   git clone https://github.com/roonil03/holo-ricing.git
    cd holo-rice
    ```
 
