@@ -143,7 +143,7 @@ This project is a fan-made tribute to Hololive and is not officially affiliated 
 
 ## License 📄
 
-This project is released under the MIT License. See the [LICENSE file](https://github.com/Roonil03/HoloRicing/blob/main/LICENSE) for details.
+This project is released under the MIT License. See the [LICENSE file](https://github.com/Roonil03/Holo-Ricing/blob/main/LICENSE) for details.
 
 ## Support 💝
 
