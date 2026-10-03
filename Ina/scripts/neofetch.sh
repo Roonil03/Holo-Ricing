@@ -16,11 +16,13 @@ else
 fi
 
 # Use the pre-shrunk neofetch art (20x37) so all stats fit side-by-side.
-# Apply Takodachi colors (Yellow halo, Magenta body)
+# Use neofetch-native ${c1}/${c2} color markers (NOT raw ANSI escapes):
+# neofetch strips ${cN} when measuring ascii width, but counts raw
+# escapes as visible chars, which pushes the stats far to the right.
+# Apply Takodachi colors (c1=magenta body, c2=yellow halo)
 cp "$SRC_DIR/tako-ascii-neofetch.txt" /tmp/tako-ascii.txt
-sed -i 's/^/\x1b[35m/' /tmp/tako-ascii.txt
-sed -i 's/:/\x1b[33m:\x1b[35m/g' /tmp/tako-ascii.txt
-sed -i 's/$/\x1b[0m/' /tmp/tako-ascii.txt
+sed -i 's/^/${c1}/' /tmp/tako-ascii.txt
+sed -i 's/:/${c2}:${c1}/g' /tmp/tako-ascii.txt
 cp /tmp/tako-ascii.txt ~/.config/neofetch/tako-ascii.txt
 
 # Configure Neofetch (full stats to match fastfetch modules)
@@ -57,8 +59,9 @@ print_info() {
 image_backend="ascii"
 image_source="$HOME/.config/neofetch/tako-ascii.txt"
 ascii_distro="auto"
-ascii_colors=(5 5)
+ascii_colors=(5 3)
 ascii_bold="on"
+gap=2
 colors=(5 5 5 5 5 7)
 EOF
 
