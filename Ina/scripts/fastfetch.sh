@@ -1,13 +1,12 @@
 #!/bin/bash
-# 03-fastfetch.sh - Installs and configures fastfetch & neofetch with a Tako ASCII art
+# 03-fastfetch.sh - Installs and configures fastfetch with a Tako ASCII art
 
-echo "Installing Fastfetch and Neofetch..."
+echo "Installing Fastfetch..."
 sudo add-apt-repository ppa:zhangsongcui3371/fastfetch -y
-sudo apt-get install -y fastfetch neofetch
+sudo apt-get install -y fastfetch
 
 # Setup config directories
 mkdir -p ~/.config/fastfetch
-mkdir -p ~/.config/neofetch
 
 echo "Copying configs and processing ASCII art..."
 # Check if running from Makefile (root of Ricing) or from scripts dir
@@ -34,37 +33,6 @@ sed -i 's/^/\x1b[35m/' /tmp/tako-ascii.txt
 sed -i 's/:/\x1b[33m:\x1b[35m/g' /tmp/tako-ascii.txt
 sed -i 's/$/\x1b[0m/' /tmp/tako-ascii.txt
 cp /tmp/tako-ascii.txt ~/.config/fastfetch/tako-ascii.txt
-cp /tmp/tako-ascii.txt ~/.config/neofetch/tako-ascii.txt
-
-# Configure Neofetch
-cat << 'EOF' > ~/.config/neofetch/config.conf
-print_info() {
-    info title
-    info underline
-    info "OS" distro
-    info "Host" model
-    info "Kernel" kernel
-    info "Uptime" uptime
-    info "Packages" packages
-    info "Shell" shell
-    info "DE" de
-    info "WM" wm
-    info "Theme" theme
-    info "Icons" icons
-    info "Terminal" term
-    info "Terminal Font" term_font
-    info "CPU" cpu
-    info "GPU" gpu
-    info "Memory" memory
-    prin "" "\e[33mIna Ina Ina, Ina Ina!\e[0m"
-}
-image_backend="ascii"
-image_source="$HOME/.config/neofetch/tako-ascii.txt"
-ascii_distro="auto"
-ascii_colors=(5 5)
-ascii_bold="on"
-colors=(5 5 5 5 5 7)
-EOF
 
 # Make fastfetch run on terminal startup
 if ! grep -q "fastfetch" ~/.bashrc; then
@@ -72,4 +40,4 @@ if ! grep -q "fastfetch" ~/.bashrc; then
     echo "Added fastfetch to ~/.bashrc"
 fi
 
-echo "Fastfetch and Neofetch configured! Open a new terminal to see the Takodachi!"
+echo "Fastfetch configured! Open a new terminal to see the Takodachi!"
