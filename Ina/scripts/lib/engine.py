@@ -241,6 +241,7 @@ def parser():
     p.add_argument('--simulate-events', nargs='+', choices=['locked', 'tick', 'unlocked', 'lost-session', 'exit'])
     p.add_argument('--approved', action='store_true')
     p.add_argument('--widgets', nargs='+')
+    p.add_argument('--components', nargs='+')
     p.add_argument('--allow-boot-change', action='store_true')
     p.add_argument('--power-profile', choices=['power-saver', 'balanced', 'performance'])
     return p
