@@ -177,6 +177,10 @@ def restore(ctx, component):
         print(f'No backup for {component}; nothing to restore.')
         return
     manifest = json.loads(path.read_text())
+    extra = None
+    if component == 'firefox':
+        from components.firefox import prepare_restore
+        extra = prepare_restore(ctx, manifest)
     # Validate the entire backup before making any restoration changes.
     for name, entry in manifest['files'].items():
         file = reject_links(name)
@@ -188,6 +192,10 @@ def restore(ctx, component):
     for entry in manifest['settings'].values():
         if ctx.get(entry['schema'], entry['key']) not in (entry['original'], entry['applied']):
             raise Error(f"Setting changed since application: {entry['schema']}/{entry['key']}")
+    if extra and extra[0].exists():
+        print(f'Restore owned Firefox preferences: {extra[0]}')
+        if not ctx.dry:
+            atomic(extra[0], extra[1].encode(), stat.S_IMODE(extra[0].stat().st_mode))
     for name, entry in manifest['files'].items():
         print(f'Restore: {name}')
         if not ctx.dry:
