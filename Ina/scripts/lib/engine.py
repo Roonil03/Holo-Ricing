@@ -201,6 +201,16 @@ def restore(ctx, component):
         print(f'Restore owned Firefox preferences: {extra[0]}')
         if not ctx.dry:
             atomic(extra[0], extra[1].encode(), stat.S_IMODE(extra[0].stat().st_mode))
+    if component == 'lockscreen' and 'rotation_original' in manifest:
+        rotation = reject_links(ctx.state / 'lock-rotation.json')
+        current = rotation.read_text() if rotation.exists() else None
+        if current not in (manifest['rotation_original'], manifest['rotation_applied']):
+            raise Error('Rotation state changed externally; inspect it before restoring.')
+        if not ctx.dry:
+            if manifest['rotation_original'] is None:
+                rotation.unlink(missing_ok=True)
+            else:
+                atomic(rotation, manifest['rotation_original'].encode())
     for name, entry in manifest['files'].items():
         print(f'Restore: {name}')
         if not ctx.dry:
@@ -227,6 +237,8 @@ def parser():
     p.add_argument('--user-chrome', action='store_true')
     p.add_argument('--image')
     p.add_argument('--images', nargs=3)
+    p.add_argument('--asset-config')
+    p.add_argument('--simulate-events', nargs='+', choices=['locked', 'tick', 'unlocked', 'lost-session', 'exit'])
     p.add_argument('--approved', action='store_true')
     p.add_argument('--widgets', nargs='+')
     p.add_argument('--allow-boot-change', action='store_true')
@@ -244,6 +256,14 @@ def main():
     p = parser()
     args = p.parse_args(argv)
     args.command = command
+    if args.asset_config:
+        asset_path = reject_links(Path(args.asset_config).expanduser())
+        assets = json.loads(asset_path.read_text())
+        args.image = args.image or assets.get('desktop_image')
+        args.images = args.images or assets.get('lock_images')
+        if args.images and len(args.images) != 3:
+            raise Error('Asset configuration must specify exactly three lock image paths.')
+        # Approval requires the explicit command-line flag, not a file field.
     ctx = Context(args)
     if args.component == 'restore':
         if not args.restore_component:
