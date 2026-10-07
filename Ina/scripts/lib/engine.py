@@ -177,6 +177,11 @@ def restore(ctx, component):
         print(f'No backup for {component}; nothing to restore.')
         return
     manifest = json.loads(path.read_text())
+    if component == 'gaming-mode':
+        from components.gaming_mode import restore_run
+        ctx.manifest, ctx.manifest_path = manifest, path
+        restore_run(ctx)
+        return
     extra = None
     if component == 'firefox':
         from components.firefox import prepare_restore

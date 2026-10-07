@@ -7,5 +7,5 @@ ina_main() {
     local script_dir
     script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
     source "$script_dir/../../dotfiles/colors.sh"
-    PYTHONDONTWRITEBYTECODE=1 python3 "$script_dir/engine.py" "$component" "$@"
+    PYTHONDONTWRITEBYTECODE=1 exec python3 "$script_dir/engine.py" "$component" "$@"
 }
