@@ -19,6 +19,8 @@ def prepare_restore(ctx, manifest):
     if not details:
         return None
     profile = reject_links(details['profile'])
+    if not profile.is_relative_to(ctx.home):
+        raise Error('Firefox backup profile is outside the user directory.')
     if any((profile / name).exists() or (profile / name).is_symlink() for name in ('lock', '.parentlock', 'parent.lock')):
         raise Error('Close the selected Firefox profile before restoring.')
     prefs = reject_links(profile / 'prefs.js')

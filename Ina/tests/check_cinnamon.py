@@ -25,7 +25,7 @@ def main():
         root = Path(name)
         runtime = root / 'runtime'
         runtime.mkdir(mode=0o700)
-        for component, flags in [('window-controls', []), ('taskbar', []), ('widgets', ['--widgets', 'clock', 'calendar', 'system'])]:
+        for component, flags in [('window-controls', []), ('nemo', []), ('taskbar', []), ('widgets', ['--widgets', 'clock', 'calendar', 'system'])]:
             subprocess.run(['bash', str(repo / 'Ina/scripts' / (component + '.sh')), '--test-root', name, '--apply', *flags], check=True, stdout=subprocess.DEVNULL)
         display = next((f':{number}' for number in range(90, 110) if not Path(f'/tmp/.X{number}-lock').exists() and not Path(f'/tmp/.X11-unix/X{number}').exists()), None)
         if display is None:

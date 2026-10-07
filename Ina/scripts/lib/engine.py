@@ -6,6 +6,7 @@ import fcntl
 import importlib.util
 import json
 import os
+import re
 from pathlib import Path
 import shlex
 import shutil
@@ -33,7 +34,7 @@ def reject_links(path):
     for part in (path, *path.parents):
         if part.is_symlink():
             raise Error(f"Refusing symbolic link: {part}")
-    return path
+    return path.resolve(strict=False)
 
 
 def atomic(path, data, mode=0o600):
@@ -69,7 +70,7 @@ class Context:
         self.dry = not args.apply or args.dry_run
         self.test = Path(args.test_root).absolute() if args.test_root else None
         if self.test:
-            reject_links(self.test)
+            self.test = reject_links(self.test)
             if not str(self.test).startswith('/tmp/') or not self.test.is_dir():
                 raise Error('--test-root must be an existing real directory beneath /tmp')
         self.home = self.test / 'home' if self.test else Path.home()
@@ -131,9 +132,12 @@ class Context:
         current = self.get(schema, key)  # Missing keys fail before mutation.
         # Check installed schema type and range without modifying any settings.
         from gi.repository import Gio, GLib
-        settings = Gio.Settings.new(schema)
-        candidate = GLib.Variant.parse(settings.get_value(key).get_type(), wanted, None, None)
-        if not settings.props.settings_schema.get_key(key).range_check(candidate):
+        schema_object = Gio.SettingsSchemaSource.get_default().lookup(schema, True)
+        if schema_object is None or not schema_object.has_key(key):
+            raise Error(f'Installed settings schema is missing {schema}/{key}.')
+        schema_key = schema_object.get_key(key)
+        candidate = GLib.Variant.parse(schema_key.get_value_type(), wanted, None, None)
+        if not schema_key.range_check(candidate):
             raise Error(f'Unsupported value for {schema}/{key}: {wanted}')
         print(f'{schema}/{key} = {wanted}')
         if self.dry or current == wanted:
@@ -144,7 +148,7 @@ class Context:
         self.save()  # Persist recovery before changing anything.
         self.put(schema, key, wanted)
 
-    def file(self, path, content, mode=None):
+    def file(self, path, content, mode=None, block=None):
         path = reject_links(path)
         if self.test and not path.is_relative_to(self.test):
             raise Error(f'Test attempted to escape its directory: {path}')
@@ -163,12 +167,34 @@ class Context:
             'mode': stat.S_IMODE(path.stat().st_mode) if path.exists() else None,
         })
         entry['applied'] = base64.b64encode(content).decode()
+        if block:
+            entry.setdefault('block_original', block['original'])
+            entry['block_marker'] = block['marker']
+            entry['block_applied'] = block['applied']
         self.save()
         atomic(path, content, mode if mode is not None else entry['mode'] or 0o600)
+
+    def block(self, path, marker, content):
+        path = reject_links(path)
+        text = path.read_text() if path.exists() else ''
+        pattern = block_pattern(marker)
+        matches = list(re.finditer(pattern, text, flags=re.DOTALL))
+        if len(matches) > 1:
+            raise Error(f'Duplicate owned CSS blocks in {path}')
+        original = matches[0].group() if matches else ''
+        wanted = '\n' + content
+        result = re.sub(pattern, lambda match: wanted, text, flags=re.DOTALL) if matches else text + wanted
+        self.file(path, result, block={'original': original, 'marker': marker, 'applied': wanted})
 
     def recover(self):
         print('Recovery: ' + shlex.join(['bash', str(Path(__file__).parents[1] / 'restore.sh'), '--component', self.name, '--apply']))
         print(f'Backup: {self.manifest_path}')
+        if self.name in ('window-controls', 'taskbar', 'widgets', 'cursor', 'animations'):
+            print('Text-console recovery: ' + shlex.join(['dbus-run-session', '--', 'bash', str(Path(__file__).parents[1] / 'restore.sh'), '--component', self.name, '--apply']))
+
+
+def block_pattern(marker):
+    return r'\n?/\* ' + re.escape(marker) + r' begin \*/.*?/\* ' + re.escape(marker) + r' end \*/\n?'
 
 
 def restore(ctx, component):
@@ -187,11 +213,21 @@ def restore(ctx, component):
         from components.firefox import prepare_restore
         extra = prepare_restore(ctx, manifest)
     # Validate the entire backup before making any restoration changes.
+    blocks = {}
     for name, entry in manifest['files'].items():
         file = reject_links(name)
         if not file.is_relative_to(ctx.home):
             raise Error(f'Backup contains a path outside the user directory: {file}')
         current = base64.b64encode(file.read_bytes()).decode() if file.exists() else None
+        if 'block_marker' in entry:
+            text = file.read_text() if file.exists() else ''
+            pattern = block_pattern(entry['block_marker'])
+            matches = list(re.finditer(pattern, text, flags=re.DOTALL))
+            if len(matches) > 1 or (matches[0].group() if matches else '') not in (entry['block_original'], entry['block_applied']):
+                raise Error(f'Owned CSS block changed since application: {file}')
+            result = re.sub(pattern, lambda match: entry['block_original'], text, flags=re.DOTALL)
+            blocks[name] = result
+            continue
         if current not in (entry['original'], entry['applied']):
             raise Error(f'File changed since Ina applied it; preserve it manually first: {file}')
     for entry in manifest['settings'].values():
@@ -214,7 +250,12 @@ def restore(ctx, component):
     for name, entry in manifest['files'].items():
         print(f'Restore: {name}')
         if not ctx.dry:
-            if entry['original'] is None:
+            if name in blocks:
+                if entry['original'] is None and not blocks[name]:
+                    Path(name).unlink(missing_ok=True)
+                else:
+                    atomic(Path(name), blocks[name].encode(), entry['mode'] or 0o600)
+            elif entry['original'] is None:
                 Path(name).unlink(missing_ok=True)
             else:
                 atomic(Path(name), base64.b64decode(entry['original']), entry['mode'])
@@ -286,6 +327,12 @@ def main():
         raise Error('Changing desktop settings requires both --apply and --apply-desktop.')
     if not ctx.test and not ctx.dry and os.geteuid() == 0:
         raise Error('Run as your desktop user, not root.')
+    if getattr(module, 'DESKTOP', False) and not ctx.test and not ctx.dry:
+        mint = Path('/etc/linuxmint/info')
+        if not mint.is_file() or 'RELEASE=22.3' not in mint.read_text() or checked(['cinnamon', '--version']) != 'Cinnamon 6.6.9':
+            raise Error('This component is tested only on Linux Mint 22.3 with Cinnamon 6.6.9.')
+        if 'Cinnamon' not in os.environ.get('XDG_CURRENT_DESKTOP', '') or os.environ.get('XDG_SESSION_TYPE') != 'x11':
+            raise Error('Apply desktop components from the tested Cinnamon X11 session.')
     ctx.acquire()
     ctx.recover()
     module.run(ctx)

@@ -60,7 +60,7 @@ def run(ctx):
     validate = load_wallpaper()
     desktop = validate(ctx.args.image, ctx.args.approved)
     images = [validate(path, ctx.args.approved) for path in ctx.args.images]
-    if len({path.stat().st_ino for path in images}) != 3 or len(set(images)) != 3:
+    if len({(path.stat().st_dev, path.stat().st_ino) for path in images}) != 3 or len(set(images)) != 3:
         raise Error('Supply exactly three distinct lock images, including no hard-link duplicates.')
     print('Rotation order: ' + ', '.join(str(p) for p in images) + '. Interval: 300 seconds while locked.')
     print('Restore static desktop: ' + str(desktop))

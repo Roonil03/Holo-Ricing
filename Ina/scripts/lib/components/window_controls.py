@@ -42,8 +42,6 @@ def run(ctx):
     ctx.setting('org.cinnamon.desktop.wm.preferences', 'theme', 'Ina-Windows')
     ctx.setting('org.cinnamon.desktop.wm.preferences', 'button-layout', ':minimize,maximize,close')
     css = ctx.config / 'gtk-3.0/gtk.css'
-    original_css = css.read_text() if css.exists() else ''
-    original_css = re.sub(r'/\* Ina window controls begin \*/.*?/\* Ina window controls end \*/\n?', '', original_css, flags=re.DOTALL)
     added = f'''/* Ina window controls begin */
 @define-color wm_title {p['ANCIENT_PARCHMENT']};
 @define-color wm_title_unfocused {p['MUTED_TEXT']};
@@ -54,5 +52,5 @@ headerbar:backdrop {{ background-color: {p['ABYSS']}; color: {p['MUTED_TEXT']}; 
 decoration {{ box-shadow: 0 3px 8px alpha({p['INK']}, 0.35); }}
 /* Ina window controls end */
 '''
-    ctx.file(css, original_css.rstrip('\n') + '\n' + added)
+    ctx.block(css, 'Ina window controls', added)
     print('GTK 3 titlebars use a user CSS override; GTK 4 and application-drawn controls may ignore it [unverified].')

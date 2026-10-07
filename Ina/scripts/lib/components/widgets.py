@@ -40,9 +40,9 @@ def run(ctx):
             raise Error(f'Desklet source missing: {source}')
         schema = json.loads((source / 'settings-schema.json').read_text())
         if name != 'clock':
-            for file in sorted(source.iterdir()):
-                if file.is_file():
-                    ctx.file(ctx.data / 'cinnamon/desklets' / uuid / file.name, file.read_bytes(), 0o644)
+            for filename in ('desklet.js', 'metadata.json', 'settings-schema.json', 'LICENSE'):
+                file = source / filename
+                ctx.file(ctx.data / 'cinnamon/desklets' / uuid / filename, file.read_bytes(), 0o644)
         config = ctx.config / 'cinnamon/spices' / uuid / (str(identity) + '.json')
         settings = json.loads(config.read_text()) if config.exists() else schema
         for key, value in schema.items():

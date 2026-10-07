@@ -92,3 +92,9 @@ class BehaviorTests(unittest.TestCase):
         result = subprocess.run(['bash', str(REPO / 'Ina/scripts/nemo.sh'), '--apply'], capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('--apply-desktop', result.stderr)
+
+    def test_unavailable_widget_selection_changes_nothing(self):
+        result = self.invoke('widgets', '--widgets', 'clock', 'media', '--apply')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.root / 'settings.json').exists())
+        self.assertFalse((self.home / '.local/share').exists())

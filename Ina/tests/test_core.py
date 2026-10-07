@@ -61,6 +61,26 @@ class CoreTests(unittest.TestCase):
         with self.assertRaises(engine.Error):
             self.ctx.file('/etc/lightdm/slick-greeter.conf', 'no')
 
+    def test_parent_traversal_cannot_escape_test_root(self):
+        args = engine.parser().parse_args(['icons', '--test-root', '/tmp/../etc', '--apply'])
+        with self.assertRaises(engine.Error):
+            engine.Context(args)
+
+    def test_component_css_blocks_restore_independently(self):
+        target = self.ctx.home / 'gtk.css'
+        target.parent.mkdir(parents=True)
+        target.write_text('/* original user CSS, no final newline */')
+        original = target.read_text()
+        self.ctx.block(target, 'First', '/* First begin */\none\n/* First end */\n')
+        args = engine.parser().parse_args(['nemo', '--test-root', str(self.root), '--apply'])
+        second = engine.Context(args)
+        second.block(target, 'Second', '/* Second begin */\ntwo\n/* Second end */\n')
+        engine.restore(self.ctx, 'icons')
+        self.assertIn('Second begin', target.read_text())
+        self.assertNotIn('First begin', target.read_text())
+        engine.restore(second, 'nemo')
+        self.assertEqual(target.read_text(), original)
+
     def test_restore_refuses_later_user_edit(self):
         target = self.ctx.home / 'file'
         self.ctx.file(target, 'ina')
