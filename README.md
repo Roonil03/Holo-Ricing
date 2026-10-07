@@ -1,158 +1,47 @@
 # Holo-Ricing
 
-**A Linux customization project themed around Hololive VTubers**
+An unofficial fan configuration project for Linux Mint Cinnamon. The new Ina components use dark violet, parchment text, restrained teal accents, and built-in motion settings. Source: [palette](Ina/dotfiles/colors.sh).
 
-Holo-Rice is a comprehensive collection of Linux customization scripts and configurations that transforms your Linux environment with beautiful Hololive-themed aesthetics. This project brings the colorful and engaging world of Hololive VTubers to your desktop through carefully crafted ricing configurations.
+## Supported environment
 
-## What is Ricing? 🔧
+The desktop components target Linux Mint 22.3, Cinnamon 6.6.9, and X11. Real application checks these versions and refuses other environments. Sources: [shared implementation](Ina/scripts/lib/engine.py) and [recorded checks](Ina/README.md#verification). Mint documents the release's Cinnamon 6.6 series in its [22.3 release documentation](https://www.linuxmint.com/rel_zena_whatsnew.php).
 
-"Ricing" is the art of customizing and personalizing your Linux operating system to improve both its appearance and functionality. The term originated from the car enthusiast community, where "RICE" stood for "Race Inspired Cosmetic Enhancement," referring to visual modifications that enhanced the aesthetic appeal of vehicles. In the Linux world, ricing involves:
+Compatibility with other versions, sessions, and Firefox builds is [unverified].
 
-- Customizing desktop environments and window managers
-- Modifying system themes, icons, and color schemes
-- Configuring terminal appearances and behaviors
-- Personalizing boot screens, lock screens, and wallpapers
-- Optimizing workflows and system interfaces
+## Preview and apply
 
-Ricing allows users to create a fully personalized computing environment that reflects their preferences and enhances their daily computing experience.
+Run commands from the repository root. Nothing is preselected:
 
-## What is Hololive? 🌟
+```bash
+bash Ina/scripts/install.sh --dry-run
+bash Ina/scripts/install.sh --dry-run --components icons cursor nemo animations
+bash Ina/scripts/install.sh --apply --apply-desktop --components icons cursor nemo animations
+```
 
-Hololive is one of the world's largest VTuber (Virtual YouTuber) agencies, operated by Cover Corporation. VTubers are content creators who use virtual avatars to stream games, chat with audiences, and create entertainment content. Hololive has produced many globally recognized VTubers who engage with fans through:
+Apply only selected components as your desktop user. The new scripts do not install packages, restart Cinnamon or LightDM, or reboot. Sources: [installer](Ina/scripts/lib/components/install.py) and [shared implementation](Ina/scripts/lib/engine.py).
 
-- Daily live streaming sessions
-- Interactive gaming content
-- Music releases and virtual concerts
-- Collaborative projects and events
-- Community interaction and fan art creation
+Read [Ina instructions](Ina/README.md) for dependencies, individual commands, backups, recovery, asset approval, and limitations. GRUB activation remains manual. Live lock rotation and Soundbox are unavailable.
 
-The agency operates multiple branches including Hololive Japan, Hololive English, and Hololive Indonesia, featuring dozens of unique VTuber personalities, each with their own distinctive character designs, personalities, and fan communities.
+## Restore
 
-## Project Structure 
+List backups, preview restoration, then restore a selected component:
 
-This repository contains themed customization scripts for various Hololive characters, with each character having their own dedicated directory containing specific ricing configurations.
+```bash
+bash Ina/scripts/restore.sh
+bash Ina/scripts/restore.sh --component nemo --dry-run
+bash Ina/scripts/restore.sh --component nemo --apply
+```
 
-### Root Directory Scripts
+Backups preserve original contents, permissions, and owned setting values. Restoration refuses conflicting edits to owned settings and files. Component CSS blocks restore independently. Source: [shared implementation](Ina/scripts/lib/engine.py).
 
-#### `gitConfig.sh` - Git Environment Configuration
+## Older scripts
 
-Core Functionality:
+Older Ina scripts and dotfiles, root Git setup, and package initialization scripts are unchanged. They are excluded from the new installer and do not have its backup, preview, or licensing checks. Use only the commands described in [Ina instructions](Ina/README.md). Sources: repository scripts and [credits](Ina/credits.md#images-and-older-files).
 
-- Automated Installation
+## Assets and license
 
-   - Installs Git through system package manager
+No new wallpapers, logos, official video clips, fonts, or cursor artwork are bundled. Image paths remain empty until you supply approved files. Do not assume that downloading an image grants ownership or redistribution rights. Record the original author, source, and license before adding an asset. See [credits](Ina/credits.md) for external sources used by the new components.
 
-   - Verifies successful installation with version check
+The repository's [MIT license](LICENSE) covers original project code only unless a file says otherwise. The two redistributed desklets retain separate GPL licenses. Installed themes, icons, and cursors retain their original licenses.
 
-- Configuration Workflow
-
-   - Interactive username/email setup with existing config detection
-
-   - Text editor selection (nano/vim/VS Code/emacs/gedit)
-
-   - Preconfigured aliases for common commands (st, co, br, lg)
-
-- Security & Compliance
-
-   - Credential helper configuration with 1-hour cache
-
-   - Line ending conversion based on OS detection
-
-   - Default branch initialization as main
-
-Perfect for users who have just installed Linux and want to quickly establish a proper Git workflow environment.
-
-#### `initialization.sh`
-A system initialization script that prepares your fresh Linux installation with essential applications and configurations. This script handles:
-- Package Management
-
-   - Installs 35+ essential packages across categories
-
-   - Includes CLI tools (ripgrep, bat, exa), sysadmin utilities (ncdu, bandwhich), and development environments (Go, Python)
-
-- Application Setup
-
-   - Installs Brave browser via official script
-
-   - Configures Wine/winetricks for Windows compatibility
-
-   - Lightweight editor setup (Neovim, Emacs minimal install)
-   
-This script is specifically designed for new Linux users who want to quickly transform a minimal installation into a fully functional desktop environment.
-
-## Getting Started 🚀
-
-### Prerequisites
-- A Linux distribution (Ubuntu, Debian, Mint, Fedora, etc.)
-- Basic terminal/command line knowledge
-- Administrator privileges (sudo access)
-
-### Quick Setup
-1. Clone this repository:
-   ```bash
-   git clone https://github.com/roonil03/holo-ricing.git
-   cd holo-rice
-   ```
-
-2. Make scripts executable:
-   ```bash
-   chmod +x git.sh initialization.sh
-   ```
-
-3. Run the initialization script:
-   ```bash
-   ./initialization.sh
-   ```
-
-4. Set up Git (if needed):
-   ```bash
-   ./git.sh
-   ```
-
-5. Choose your favorite Hololive character directory and follow the specific README instructions within each character folder.
-
-## Available Characters 🎭
-
-Each character directory contains:
-- Custom themes and color schemes
-- Wallpapers and desktop backgrounds
-- Terminal configurations
-- System UI modifications
-- Character-specific scripts and configurations
-
-### Currently Available:
-- **Ina** - Ninomae Ina'nis themed configurations 🐙
-
-### Coming Soon:
-- **Suisei** - Hoshimachi Suisei themed configurations ☄️
-
-## Contributing 🤝
-
-We welcome contributions from the community! Whether you want to:
-- Add new character themes
-- Improve existing configurations
-- Fix bugs or issues
-- Add support for new Linux distributions
-- Create documentation improvements
-
-Please feel free to submit pull requests or open issues for discussion.
-
-## Disclaimer ⚠️
-
-This project is a fan-made tribute to Hololive and is not officially affiliated with Cover Corporation or Hololive Production. All Hololive character designs and intellectual property belong to their respective owners.
-
-## License 📄
-
-This project is released under the MIT License. See the [LICENSE file](https://github.com/Roonil03/Holo-Ricing/blob/main/LICENSE) for details.
-
-## Support 💝
-
-If you enjoy this project and want to support Hololive:
-- Subscribe to your favorite Hololive VTuber channels
-- Watch their streams and content
-- Support them through official merchandise and donations
-- Respect their guidelines and community rules
-
----
-
-**Have fun ricing and enjoy your Hololive-themed Linux experience!** 🎉
+Ninomae Ina'nis, hololive, and related marks belong to their respective rights holders, including Cover Corp. This is an unofficial fan configuration project with no claimed affiliation or endorsement. Sources: [official talent page](https://hololive.hololivepro.com/en/talents/ninomae-inanis/) and [Cover's guidelines](https://hololivepro.com/en/terms/).
