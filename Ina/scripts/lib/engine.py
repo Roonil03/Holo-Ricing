@@ -133,7 +133,7 @@ class Context:
         from gi.repository import Gio, GLib
         settings = Gio.Settings.new(schema)
         candidate = GLib.Variant.parse(settings.get_value(key).get_type(), wanted, None, None)
-        if not settings.range_check(key, candidate):
+        if not settings.props.settings_schema.get_key(key).range_check(candidate):
             raise Error(f'Unsupported value for {schema}/{key}: {wanted}')
         print(f'{schema}/{key} = {wanted}')
         if self.dry or current == wanted:
@@ -261,6 +261,6 @@ if __name__ == '__main__':
     sys.modules['engine'] = sys.modules[__name__]
     try:
         main()
-    except (Error, OSError, ValueError, KeyError) as error:
+    except (Error, OSError, ValueError, KeyError, ImportError) as error:
         print(f'Error: {error}', file=sys.stderr)
         sys.exit(1)
