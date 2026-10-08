@@ -1,0 +1,31 @@
+# Adapted from Aleph1-9012/Evangelion, themes/eva01/1080p/theme.txt.
+# Apache-2.0. Source revision fb785c3009a9346173d4b893d6aa36dd22052335.
+# Modified 2026-10-08: Ina colours, relative menu bounds, system default font,
+# dark cards for all rows, no icons, countdown graphics, or custom modules.
+title-text: ""
+desktop-color: "@ABYSS@"
+desktop-image: "background.jpg"
+terminal-left: "0"
+terminal-top: "0"
+terminal-width: "100%"
+terminal-height: "100%"
+terminal-border: "0"
+
++ boot_menu {
+  id = "__menu__"
+  left = 52%
+  top = 50%-140
+  width = 42%
+  height = 320
+  item_color = "@PARCHMENT@"
+  selected_item_color = "@TEAL@"
+  item_height = 44
+  item_padding = 0
+  item_spacing = 13
+  icon_width = 0
+  icon_height = 0
+  item_icon_space = 0
+  item_pixmap_style = "selectors/selected_*.png"
+  selected_item_pixmap_style = "selectors/selected_*.png"
+  scrollbar = false
+}
