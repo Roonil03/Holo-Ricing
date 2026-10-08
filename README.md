@@ -21,7 +21,7 @@ More character configurations are welcome. The [original README](https://github.
 
 ## Project structure
 
-The root setup scripts are optional and separate from character installation. They do not provide the new Ina installer's preview and per-component restore handling. Read their contents before using them. The new installer excludes older Ina scripts. Sources: [root Git script](gitConfig.sh), [root package script](initilalization.sh), and [Ina installer](Ina/scripts/lib/components/install.py).
+The root setup scripts are optional and separate from character installation. They do not provide the new Ina installer's preview and per-component restore handling. Read their contents before using them. The new installer excludes older Ina scripts. Sources: [root Git script](gitConfig.sh), [root package script](initilalization.sh), and [Ina installer](Ina/scripts/install.sh).
 
 ## Contributing
 
