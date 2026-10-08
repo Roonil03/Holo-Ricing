@@ -279,7 +279,6 @@ def parser():
     p.add_argument('--user-chrome', action='store_true')
     p.add_argument('--image')
     p.add_argument('--images', nargs=3)
-    p.add_argument('--download-images', action='store_true')
     p.add_argument('--asset-config')
     p.add_argument('--simulate-events', nargs='+', choices=['locked', 'tick', 'unlocked', 'lost-session', 'exit'])
     p.add_argument('--approved', action='store_true')

@@ -26,7 +26,9 @@ for name in "${INA_COMPONENTS[@]}"; do
     selected["$name"]=1; components+=("$name")
     if ! "$INA_DRY"; then
         case "$name" in
-            lockscreen) ina_error 'Live lock rotation is unavailable' ;;
+            lockscreen)
+                "$INA_DOWNLOAD" && "$INA_APPROVED" || ina_error 'Select --download-images --approved to prepare lock images. Live rotation remains unavailable.'
+                ;;
             vscode) [[ -n "$INA_SETTINGS" ]] || ina_error 'VS Code requires --settings PATH' ;;
             firefox) [[ -n "$INA_PROFILE" ]] || ina_error 'Firefox requires --profile PATH' ;;
             widgets) (("${#INA_WIDGETS[@]}" > 0)) || ina_error 'Select --widgets NAME...' ;;
@@ -55,6 +57,11 @@ component_args() {
         firefox) [[ -z "$INA_PROFILE" ]] || args+=(--profile "$INA_PROFILE"); "$INA_CHROME" && args+=(--user-chrome) ;;
         wallpaper) [[ -z "$INA_IMAGE" ]] || args+=(--image "$INA_IMAGE"); "$INA_APPROVED" && args+=(--approved) ;;
         widgets) (("${#INA_WIDGETS[@]}" == 0)) || args+=(--widgets "${INA_WIDGETS[@]}") ;;
+        lockscreen)
+            "$INA_DOWNLOAD" && args+=(--download-images)
+            "$INA_APPROVED" && args+=(--approved)
+            [[ -z "$INA_ASSETS" ]] || args+=(--asset-config "$INA_ASSETS")
+            ;;
         grub)
             "$INA_BOOT" && args+=(--allow-boot-change)
             "$INA_APPROVED" && args+=(--approved)

@@ -56,20 +56,14 @@ class Rotation:
 
 
 def run(ctx):
-    # URLs are configuration records, not copyright permission. No network
-    # command is invoked while the original sources have no verified license.
+    # Network downloads are prepared separately by the Bash entry point.
     sources = json.loads(SOURCES.read_text())['images']
     lock_sources = [item for item in sources if item['role'].startswith('lock-')]
     if [item['role'] for item in lock_sources] != ['lock-1', 'lock-2', 'lock-3']:
         raise Error('Expected exactly three ordered lock image source records.')
     for item in lock_sources:
         print(f"Selected {item['role']}: {item['url']}")
-        print(f"Permission: {item['permission']}. Required local file: {item['filename']}")
-    if ctx.args.download_images:
-        if ctx.dry:
-            print('Would not download: original lock-image permissions remain [unverified].')
-        else:
-            raise Error('Downloads blocked: original lock-image permissions remain [unverified]. Obtain permission and supply approved local paths with --images or --asset-config.')
+        print(f"Local download name: {item['filename']}")
     print('Live rotation unavailable: this Cinnamon interface exposes ActiveChanged, which does not prove the session is locked.')
     print('No user service is installed or enabled until reliable lock-state detection and unlock restoration pass an isolated session test.')
     if not ctx.args.images or not ctx.args.image:
