@@ -204,7 +204,7 @@ def restore(ctx, component):
         return
     manifest = json.loads(path.read_text())
     if component == 'gaming-mode':
-        from components.gaming_mode import restore_run
+        from components.gaming_legacy import restore_run
         ctx.manifest, ctx.manifest_path = manifest, path
         restore_run(ctx)
         return
@@ -270,6 +270,7 @@ def parser():
     p.add_argument('component')
     p.add_argument('--dry-run', action='store_true')
     p.add_argument('--apply', action='store_true')
+    p.add_argument('--archive-backup', action='store_true', help=argparse.SUPPRESS)
     p.add_argument('--apply-desktop', action='store_true')
     p.add_argument('--test-root')
     p.add_argument('--component', dest='restore_component')
@@ -316,6 +317,13 @@ def main():
             raise Error('Invalid component name.')
         ctx.acquire()
         restore(ctx, args.restore_component)
+        if args.archive_backup and not ctx.dry:
+            path = reject_links(ctx.state / 'backups' / args.restore_component / 'manifest.json')
+            if path.exists():
+                archive = path.with_name('manifest.python-restored.json')
+                if archive.exists():
+                    raise Error('Prior archived Python backup exists; preserve it before retrying.')
+                path.rename(archive)
         return
     component = Path(__file__).parent / 'components' / (args.component.replace('-', '_') + '.py')
     if not component.is_file():
