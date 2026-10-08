@@ -43,7 +43,6 @@ Each entry accepts `--dry-run`. Omit `--apply` to preview. Live desktop changes 
 | [Gaming mode](scripts/lib/components/gaming_mode.py) | `bash Ina/scripts/gaming-mode.sh --dry-run -- your-game` | Use `--apply --apply-desktop -- your-game`. Restore notifications and effects on exit. Optional `--power-profile balanced` changes an available profile. |
 | [Lock screen](scripts/lib/components/lockscreen.py) | `bash Ina/scripts/lockscreen.sh --dry-run` | Real application is unavailable. The ordered three-image model is test-only; no service is installed or enabled. |
 | [Desktop wallpaper](scripts/lib/components/wallpaper.py) | `bash Ina/scripts/wallpaper.sh --dry-run --image PATH --approved` | Add `--apply --apply-desktop`. Require one approved local image. Disable slideshow and set a static wallpaper. |
-| [Login screen](scripts/lib/components/login_screen.py) | `bash Ina/scripts/login-screen.sh --dry-run` | Report and preserve the configured Slick Greeter background. `--apply` changes nothing. No replacement was supplied. |
 | [Cursor](scripts/lib/components/cursor.py) | `bash Ina/scripts/cursor.sh --dry-run` | Add `--apply --apply-desktop`. Enable installed DMZ-White at size 32 and back up user GTK and Xresources settings. Preserve login cursors. |
 | [Taskbar](scripts/lib/components/taskbar.py) | `bash Ina/scripts/taskbar.sh --dry-run` | Add `--apply --apply-desktop`. Bottom panel, 40 px, centered clock. Preserve custom applets, IDs, and other panels. The chosen Cinnamon theme also imports base menu styling. |
 | [Nemo](scripts/lib/components/nemo.py) | `bash Ina/scripts/nemo.sh --dry-run` | Add `--apply --apply-desktop`. Icon view, standard zoom, visible sidebar and toolbar, and Nemo-scoped palette CSS. Preserve folder metadata. |
@@ -65,7 +64,7 @@ The profile example is a placeholder. Select your existing profile. Restart Fire
 
 ## Images and approval
 
-[assets.example.json](dotfiles/assets.example.json) has one empty desktop path, exactly three empty lock paths, and an empty optional login field. The login field is reserved; the current login image is preserved regardless of its contents. No replacement operation is provided. Source: [login component](scripts/lib/components/login_screen.py).
+[assets.example.json](dotfiles/assets.example.json) has one empty desktop path, exactly three empty lock paths, and an empty optional login field. The login field is reserved and unused by the new installer. It provides no login-screen component. The older `login_screen.sh` remains excluded. Source: [installer](scripts/lib/components/install.py).
 
 Pass your local JSON file with `--asset-config PATH` to fill desktop and lock arguments. Approval still requires the command-line `--approved` flag; the JSON `approved` field does not authorize changes. Source: [argument handling](scripts/lib/engine.py).
 

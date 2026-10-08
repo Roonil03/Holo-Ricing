@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 from engine import Error
 
-AVAILABLE = ['icons', 'window-controls', 'widgets', 'vscode', 'firefox', 'gaming-mode', 'wallpaper', 'login-screen', 'cursor', 'taskbar', 'nemo', 'animations', 'grub', 'lockscreen']
+AVAILABLE = ['icons', 'window-controls', 'widgets', 'vscode', 'firefox', 'gaming-mode', 'wallpaper', 'cursor', 'taskbar', 'nemo', 'animations', 'grub', 'lockscreen']
 
 
 def run(ctx):
@@ -46,7 +46,7 @@ def run(ctx):
                 raise Error('GRUB preparation requires --allow-boot-change.')
             if name == 'gaming-mode' and not args.command:
                 raise Error('Gaming mode requires a chosen command after --.')
-        if any(name not in ('vscode', 'firefox', 'grub', 'login-screen') for name in names) and not ctx.test and not args.apply_desktop:
+        if any(name not in ('vscode', 'firefox', 'grub') for name in names) and not ctx.test and not args.apply_desktop:
             raise Error('Desktop components require --apply-desktop.')
     common = []
     for flag in ('test_root', 'settings', 'profile', 'image', 'power_profile'):
