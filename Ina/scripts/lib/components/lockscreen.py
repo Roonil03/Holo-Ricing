@@ -2,18 +2,23 @@
 import json
 import sys
 from pathlib import Path
-from engine import Error, atomic, checked
+from engine import Error, atomic, checked, reject_links
 
 DESKTOP = True
 
 
-def load_wallpaper():
-    # Keep the shared image validation in the static wallpaper component.
-    import importlib.util
-    spec = importlib.util.spec_from_file_location('wallpaper', Path(__file__).with_name('wallpaper.py'))
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module.approved_image
+def approved_image(path, approved):
+    if not path or not approved:
+        raise Error('Supply an approved local image with --image PATH --approved. Verify its original license yourself before approval.')
+    path = reject_links(Path(path).expanduser())
+    if not path.is_file():
+        raise Error(f'Image does not exist: {path}')
+    with path.open('rb') as stream:
+        header = stream.read(16)
+    if not (header.startswith(b'\x89PNG\r\n\x1a\n') or header.startswith(b'\xff\xd8\xff') or header[:6] in (b'GIF87a', b'GIF89a') or (header[:4] == b'RIFF' and header[8:12] == b'WEBP')):
+        raise Error(f'Expected a PNG, JPEG, GIF, or WebP image: {path}')
+    return path
+
 
 
 class Rotation:
@@ -57,7 +62,7 @@ def run(ctx):
         if not ctx.dry:
             raise Error('Required approved image paths are empty.')
         return
-    validate = load_wallpaper()
+    validate = approved_image
     desktop = validate(ctx.args.image, ctx.args.approved)
     images = [validate(path, ctx.args.approved) for path in ctx.args.images]
     if len({(path.stat().st_dev, path.stat().st_ino) for path in images}) != 3 or len(set(images)) != 3:
