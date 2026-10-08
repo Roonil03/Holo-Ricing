@@ -1,6 +1,5 @@
 {
   "checked_date": "2026-10-08",
-  "approval": "URLs selected by the user. Approval does not grant copyright permission.",
   "images": [
     {
       "role": "grub",
@@ -17,7 +16,7 @@
       "source": "https://moewalls.com/anime/ninomae-inanis-winter-forest-virtual-youtuber-live-wallpaper/",
       "author": "[unverified]",
       "permission": "[unverified]",
-      "download_allowed": false,
+      "download_allowed": true,
       "filename": "lock-1.jpg"
     },
     {
@@ -26,7 +25,7 @@
       "source": "https://www.artstation.com/artwork/b5qWyn",
       "author": "noah. (ubebop); exact CDN association [unverified]",
       "permission": "[unverified]",
-      "download_allowed": false,
+      "download_allowed": true,
       "filename": "lock-2.jpg"
     },
     {
@@ -35,7 +34,7 @@
       "source": "https://www.artstation.com/artwork/b5qWyn",
       "author": "noah. (ubebop); exact CDN association [unverified]",
       "permission": "[unverified]",
-      "download_allowed": false,
+      "download_allowed": true,
       "filename": "lock-3.jpg"
     }
   ]
