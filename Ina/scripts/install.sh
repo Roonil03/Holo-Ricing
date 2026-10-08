@@ -31,7 +31,10 @@ for name in "${INA_COMPONENTS[@]}"; do
             firefox) [[ -n "$INA_PROFILE" ]] || ina_error 'Firefox requires --profile PATH' ;;
             widgets) (("${#INA_WIDGETS[@]}" > 0)) || ina_error 'Select --widgets NAME...' ;;
             wallpaper) [[ -n "$INA_IMAGE" ]] && "$INA_APPROVED" || ina_error 'Wallpaper requires --image PATH --approved' ;;
-            grub) "$INA_BOOT" || ina_error 'GRUB requires --allow-boot-change' ;;
+            grub)
+                "$INA_BOOT" && "$INA_APPROVED" || ina_error 'GRUB requires --allow-boot-change --approved'
+                "$INA_DOWNLOAD" || [[ -n "$INA_ASSETS" && "$(jq -r '.grub_image // ""' "$INA_ASSETS")" != '' ]] || ina_error 'GRUB requires --download-images or a configured grub_image'
+                ;;
             gaming-mode) (("${#INA_COMMAND[@]}" > 0)) || ina_error 'Gaming mode requires a command after --' ;;
         esac
     fi
@@ -52,7 +55,12 @@ component_args() {
         firefox) [[ -z "$INA_PROFILE" ]] || args+=(--profile "$INA_PROFILE"); "$INA_CHROME" && args+=(--user-chrome) ;;
         wallpaper) [[ -z "$INA_IMAGE" ]] || args+=(--image "$INA_IMAGE"); "$INA_APPROVED" && args+=(--approved) ;;
         widgets) (("${#INA_WIDGETS[@]}" == 0)) || args+=(--widgets "${INA_WIDGETS[@]}") ;;
-        grub) "$INA_BOOT" && args+=(--allow-boot-change) ;;
+        grub)
+            "$INA_BOOT" && args+=(--allow-boot-change)
+            "$INA_APPROVED" && args+=(--approved)
+            "$INA_DOWNLOAD" && args+=(--download-images)
+            [[ -z "$INA_ASSETS" ]] || args+=(--asset-config "$INA_ASSETS")
+            ;;
         gaming-mode) [[ -z "$INA_POWER" ]] || args+=(--power-profile "$INA_POWER") ;;
     esac
     return 0
