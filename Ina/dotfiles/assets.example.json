@@ -1,6 +1,11 @@
 {
   "desktop_image": "",
-  "lock_images": ["", "", ""],
+  "lock_images": [
+    "",
+    "",
+    ""
+  ],
   "login_image": "",
-  "approved": false
+  "approved": false,
+  "grub_image": ""
 }

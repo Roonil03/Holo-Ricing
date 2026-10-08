@@ -25,7 +25,7 @@ ina_user_path() {
 ina_init() {
     INA_COMPONENT="$1"; shift
     INA_APPLY=false INA_DRY=true INA_DESKTOP=false INA_APPROVED=false INA_BOOT=false INA_EXPLICIT_DRY=false
-    INA_IMAGE='' INA_ASSETS='' INA_TEST='' INA_RESTORE='' INA_POWER='' INA_SETTINGS='' INA_PROFILE='' INA_CHROME=false
+    INA_IMAGE='' INA_ASSETS='' INA_TEST='' INA_RESTORE='' INA_POWER='' INA_SETTINGS='' INA_PROFILE='' INA_CHROME=false INA_DOWNLOAD=false
     INA_COMPONENTS=() INA_WIDGETS=() INA_COMMAND=()
     while (($#)); do
         case "$1" in
@@ -34,6 +34,7 @@ ina_init() {
             --apply-desktop) INA_DESKTOP=true; shift ;;
             --approved) INA_APPROVED=true; shift ;;
             --allow-boot-change) INA_BOOT=true; shift ;;
+            --download-images) INA_DOWNLOAD=true; shift ;;
             --user-chrome) INA_CHROME=true; shift ;;
             --image|--asset-config|--test-root|--component|--power-profile|--settings|--profile)
                 (($# >= 2)) && [[ "$2" != --* && -n "$2" ]] || ina_error "Missing value for $1"
@@ -55,7 +56,7 @@ ina_init() {
             --help)
                 printf '%s\n' 'Preview: --dry-run. Apply: --apply. Desktop opt-in: --apply-desktop.' \
                     'Choices: --image PATH --approved, --widgets NAME..., --components NAME...,' \
-                    '--allow-boot-change, --settings PATH, --profile PATH, --power-profile NAME, -- COMMAND.'
+                    '--download-images, --allow-boot-change, --settings PATH, --profile PATH, --power-profile NAME, -- COMMAND.'
                 exit 0 ;;
             *) ina_error "Unsupported argument: $1" ;;
         esac
@@ -80,7 +81,11 @@ ina_init() {
         INA_ASSETS="$(ina_path "$INA_ASSETS")"
         [[ -f "$INA_ASSETS" ]] || ina_error "Asset configuration missing: $INA_ASSETS"
         jq -e 'type == "object" and ((.desktop_image // "") | type == "string")' "$INA_ASSETS" >/dev/null
-        [[ -n "$INA_IMAGE" ]] || INA_IMAGE="$(jq -r '.desktop_image // ""' "$INA_ASSETS")"
+        if [[ -z "$INA_IMAGE" ]]; then
+            if [[ "$INA_COMPONENT" == grub ]]; then
+                INA_IMAGE="$(jq -er '.grub_image // "" | select(type == "string")' "$INA_ASSETS")"
+            else INA_IMAGE="$(jq -r '.desktop_image // ""' "$INA_ASSETS")"; fi
+        fi
     fi
     INA_FINISHED=false
     source "$SCRIPT_DIR/../dotfiles/colors.sh"
@@ -146,6 +151,7 @@ ina_begin() {
 ina_exit() {
     local status="$1"
     trap - EXIT INT TERM HUP
+    if [[ -n "${INA_DOWNLOAD_TMP:-}" ]]; then rm -f -- "$INA_DOWNLOAD_TMP"; fi
     if ! "$INA_FINISHED" && [[ -f "$INA_MANIFEST" ]]; then
         printf '%s\n' 'Operation interrupted. Attempting restoration from the saved backup.' >&2
         local restore_status
@@ -202,13 +208,13 @@ ina_file() {
     current='null'; [[ ! -f "$path" ]] || current="$(base64 -w0 -- "$path" | jq -Rs .)"
     if jq -e --arg p "$path" '.files|has($p)' <<< "$INA_JSON" >/dev/null; then
         entry="$(jq --arg p "$path" '.files[$p]' <<< "$INA_JSON")"
-        jq -e --argjson c "$current" '$c == .original or $c == .applied' <<< "$entry" >/dev/null || ina_error "File changed externally: $path"
+        [[ "$current" == "$(jq -c '.original' <<< "$entry")" || "$current" == "$(jq -c '.applied' <<< "$entry")" ]] || ina_error "File changed externally: $path"
     else
         saved_mode="$mode"; [[ ! -f "$path" ]] || saved_mode="$(stat -c '%a' -- "$path")"
-        entry="$(jq -n --argjson o "$current" --arg m "$saved_mode" '{original:$o,mode:$m}')"
+        entry="$(jq --arg m "$saved_mode" '{original:.,mode:$m}' <<< "$current")"
     fi
-    entry="$(jq --arg a "$content" --arg m "$mode" '.applied=$a | .applied_mode=$m' <<< "$entry")"
-    INA_JSON="$(jq --arg p "$path" --argjson e "$entry" '.files[$p]=$e' <<< "$INA_JSON")"
+    entry="$(jq --rawfile a <(printf '%s' "$content") --arg m "$mode" '.applied=$a | .applied_mode=$m' <<< "$entry")"
+    INA_JSON="$(jq --arg p "$path" --slurpfile e <(printf '%s' "$entry") '.files[$p]=$e[0]' <<< "$INA_JSON")"
     ina_track_dirs "$path"
     ina_save
     if [[ "$current" != "$(printf '%s' "$content" | jq -Rs .)" || "$(stat -c '%a' -- "$path" 2>/dev/null || true)" != "$mode" ]]; then ina_atomic "$path" "$content" "$mode"; fi
@@ -302,7 +308,7 @@ ina_restore_records() {
             [[ "$current" == "$original" || "$current" == "$applied" ]] || ina_error "CSS block changed externally: $path"
         else
             current='null'; [[ ! -f "$path" ]] || current="$(base64 -w0 -- "$path" | jq -Rs .)"
-            jq -e --argjson c "$current" '$c == .original or $c == .applied' <<< "$entry" >/dev/null || ina_error "File changed externally: $path"
+            [[ "$current" == "$(jq -c '.original' <<< "$entry")" || "$current" == "$(jq -c '.applied' <<< "$entry")" ]] || ina_error "File changed externally: $path"
         fi
     done < <(jq -r '.files|keys[]' <<< "$INA_JSON")
     if jq -e '.power != null' <<< "$INA_JSON" >/dev/null; then

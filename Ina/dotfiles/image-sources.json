@@ -1,0 +1,42 @@
+{
+  "checked_date": "2026-10-08",
+  "approval": "URLs selected by the user. Approval does not grant copyright permission.",
+  "images": [
+    {
+      "role": "grub",
+      "url": "https://images3.alphacoders.com/112/1123929.jpg",
+      "source": "https://wall.alphacoders.com/big.php?i=1123929",
+      "author": "mistimagi",
+      "permission": "private-personal-use",
+      "download_allowed": true,
+      "filename": "background.jpg"
+    },
+    {
+      "role": "lock-1",
+      "url": "https://moewalls.com/wp-content/uploads/2023/03/ninomae-inanis-winter-forest-virtual-youtuber-thumb.jpg",
+      "source": "https://moewalls.com/anime/ninomae-inanis-winter-forest-virtual-youtuber-live-wallpaper/",
+      "author": "[unverified]",
+      "permission": "[unverified]",
+      "download_allowed": false,
+      "filename": "lock-1.jpg"
+    },
+    {
+      "role": "lock-2",
+      "url": "https://cdnb.artstation.com/p/assets/images/images/054/888/645/large/noah-who-ina-background-4.jpg?1665599243",
+      "source": "https://www.artstation.com/artwork/b5qWyn",
+      "author": "noah. (ubebop); exact CDN association [unverified]",
+      "permission": "[unverified]",
+      "download_allowed": false,
+      "filename": "lock-2.jpg"
+    },
+    {
+      "role": "lock-3",
+      "url": "https://cdnb.artstation.com/p/assets/images/images/054/888/649/large/noah-who-ina-background-1.jpg?1665599247",
+      "source": "https://www.artstation.com/artwork/b5qWyn",
+      "author": "noah. (ubebop); exact CDN association [unverified]",
+      "permission": "[unverified]",
+      "download_allowed": false,
+      "filename": "lock-3.jpg"
+    }
+  ]
+}
