@@ -6,7 +6,7 @@ The new Ina commands preview by default. Apply only the components you select. R
 
 The target is Linux Mint 22.3, Cinnamon 6.6.9, and X11. The Bash conversion has not been run; compatibility and runtime behavior remain [unverified]. The recorded `gTile@shuairan` extension remains unchanged. Real desktop application checks the release, Cinnamon version, and session. Other environments are refused. Sources: [Bash implementation](scripts/lib/shell-common.sh) and [retained Python implementation](scripts/lib/engine.py). Mint's [release documentation](https://www.linuxmint.com/rel_zena_whatsnew.php) documents Cinnamon 6.6 for Mint 22.3.
 
-Icons, cursor, window controls, widgets, taskbar, Nemo, animations, wallpaper, GRUB, gaming mode, installation, and restoration now use Bash. They require `jq` [a tool for reading and changing JSON], GNU coreutils, util-linux (`flock` and gaming mode's `setsid`), awk, sed, grep, and `gsettings` for desktop preferences. VS Code, Firefox, the disabled lock-rotation model, and older backup recovery retain Python 3; the Python settings code also requires `python3-gi`. Bash path arguments require absolute paths. Array settings with unsupported escaping are refused. Missing commands cause errors. Install dependencies yourself. No package manager runs automatically. Sources: [Bash helpers](scripts/lib/shell-common.sh), [Python entry point](scripts/lib/common.sh), and [retained engine](scripts/lib/engine.py).
+Icons, cursor, window controls, widgets, taskbar, Nemo, animations, wallpaper, GRUB, gaming mode, installation, and restoration now use Bash. They require `jq` [a tool for reading and changing JSON], GNU coreutils, util-linux (`flock` and gaming mode's `setsid`), awk, sed, grep, and `gsettings` for desktop preferences. VS Code, Firefox, the disabled lock-rotation model, and older backup recovery retain Python 3; the Python settings code also requires `python3-gi`. Bash path arguments require absolute paths. GRUB image downloads additionally require `curl` and `df`. Array settings with unsupported escaping are refused. Missing commands cause errors. Install dependencies yourself. No package manager runs automatically. Sources: [Bash helpers](scripts/lib/shell-common.sh), [Python entry point](scripts/lib/common.sh), and [retained engine](scripts/lib/engine.py).
 
 Theme components require installed `mint-y-icons`, `mint-themes`, or `dmz-cursor-theme`. Optional gaming power profiles require `powerprofilesctl` and an available chosen profile. VS Code and Firefox must already be installed. No editor extension, browser extension, font, or cursor generator is installed. Sources: [icons](scripts/icons.sh), [cursor](scripts/cursor.sh), [window controls](scripts/window-controls.sh), and [gaming mode](scripts/gaming-mode.sh).
 
@@ -47,7 +47,7 @@ Each entry accepts `--dry-run`. Omit `--apply` to preview. Live desktop changes 
 | [Taskbar](scripts/taskbar.sh) | `bash Ina/scripts/taskbar.sh --dry-run` | Add `--apply --apply-desktop`. Bottom panel, 40 px, centered clock. Preserve custom applets, IDs, and other panels. The chosen Cinnamon theme also imports base menu styling. |
 | [Nemo](scripts/nemo.sh) | `bash Ina/scripts/nemo.sh --dry-run` | Add `--apply --apply-desktop`. Icon view, standard zoom, visible sidebar and toolbar, and Nemo-scoped palette CSS. Preserve folder metadata. |
 | [Animations](scripts/animations.sh) | `bash Ina/scripts/animations.sh --dry-run` | Add `--apply --apply-desktop`. Built-in fades and default speed. Disable menu, workspace, and resize effects. No blur or extensions. |
-| [GRUB](scripts/grub.sh) | `bash Ina/scripts/grub.sh --dry-run` | `--apply --allow-boot-change` prepares user files only. Activation is manual. Test the printed recipe in a disposable environment first. |
+| [GRUB](scripts/grub.sh) | `bash Ina/scripts/grub.sh --dry-run` | `--apply --allow-boot-change --download-images --approved` downloads the selected private-use JPEG and prepares user files. Alternatively select `--image PATH --approved`. Activation is manual. Test the printed recipe in a disposable environment first. |
 | [Installer](scripts/install.sh) | `bash Ina/scripts/install.sh --dry-run` | Use `--components NAME...`, then `--apply` and required flags. A terminal menu asks for selections when no names are supplied. Nothing is preselected. |
 | [Restore](scripts/restore.sh) | `bash Ina/scripts/restore.sh --component COMPONENT --dry-run` | Add `--apply` to restore that component. Without a name, list backups. Restore installer selections individually; the installer owns no configuration. |
 
@@ -64,19 +64,34 @@ The profile example is a placeholder. Select your existing profile. Restart Fire
 
 ## Images and approval
 
-[assets.example.json](dotfiles/assets.example.json) has one empty desktop path, exactly three empty lock paths, and an empty optional login field. The login field is reserved and unused by the new installer. It provides no login-screen component. The older `login_screen.sh` remains excluded. Source: [installer](scripts/install.sh).
+[assets.example.json](dotfiles/assets.example.json) has one empty desktop path, exactly three empty lock paths, an empty optional GRUB path, and an empty optional login field. The login field is reserved and unused by the new installer. It provides no login-screen component. The older `login_screen.sh` remains excluded. Source: [installer](scripts/install.sh).
 
-Pass your local JSON file with `--asset-config PATH` to fill desktop and lock arguments. Approval still requires the command-line `--approved` flag; the JSON `approved` field does not authorize changes. Sources: [Bash argument handling](scripts/lib/shell-common.sh) and [Python argument handling](scripts/lib/engine.py).
+Pass your local JSON file with `--asset-config PATH` to fill desktop and lock arguments. GRUB reads its separate `grub_image` field and does not use `desktop_image` as a fallback. Approval still requires the command-line `--approved` flag; the JSON `approved` field does not authorize changes. Sources: [Bash argument handling](scripts/lib/shell-common.sh) and [Python argument handling](scripts/lib/engine.py).
 
-Use approved static images without flashing content. The check verifies readability and the image header, not ownership, full decoding, animation frames, or permissions. These properties remain [unverified] until you check the actual supplied files. No image is downloaded. Source: [image validation](scripts/wallpaper.sh).
+Use approved static images without flashing content. The check verifies readability and the image header, not ownership, full decoding, animation frames, or permissions. These properties remain [unverified] until you check the actual supplied files. The desktop wallpaper command downloads no image. Source: [image validation](scripts/wallpaper.sh).
 
 Before adding an external file, verify redistribution permission and record its original URL, author, license, retrieval date, exact reused path, and modifications in [credits](credits.md). Missing or unclear licenses require placeholders. Do not use generated artwork, copied logos, official video clips, sexualized material, flashing effects, or low-contrast text. Approval does not establish ownership.
+
+## Selected GRUB and lock images
+
+[image-sources.json](dotfiles/image-sources.json) records the four selected URLs, their order, source pages, permission status, and the metadata check date. It contains no image bytes. GRUB uses wallpaper 1123929 by mistimagi from [Alpha Coders](https://wall.alphacoders.com/big.php?i=1123929). That source permits private, personal use and asks users to contact the artist for other use. The repository does not redistribute this wallpaper.
+
+```bash
+bash Ina/scripts/grub.sh --dry-run --download-images --approved
+bash Ina/scripts/grub.sh --apply --allow-boot-change --download-images --approved
+```
+
+These commands prepare `~/.local/share/ina/grub`, or `$XDG_DATA_HOME/ina/grub` when configured. They do not run `sudo` or change boot files. The selected download requires HTTPS, at least 128 MiB free on the temporary and destination filesystems, and a file no larger than 32 MiB with a JPEG header. The script reuses a matching component-owned download on repeat runs, rejects conflicting files, journals original bytes before publishing files, and removes its temporary download on catchable interruption. Full JPEG decoding, network behavior, repeat application, and interruption recovery remain [unverified]. Sources: [GRUB script](scripts/grub.sh), [image helper](scripts/lib/images.sh), and [backup helper](scripts/lib/shell-common.sh).
+
+The menu adapts the right-side layout from Aleph1-9012's [Evangelion theme](https://www.gnome-look.org/p/2370768). It uses three unchanged dark card pieces, parchment entry text, teal selection text, the Ina background, and GRUB's default font. It copies no character artwork, custom font, installer, or GRUB module from that project. The retained [license](vendor/grub-evangelion/LICENSE) is Apache 2.0. Exact reused paths, source revision, retrieval date, and modifications are in [NOTICE](vendor/grub-evangelion/NOTICE). Appearance, text contrast at the chosen resolution, clipping, and boot compatibility remain [unverified]. Preview in a disposable VM before manual installation.
+
+The three lock sources are ordered as requested: the [MoeWalls winter forest thumbnail](https://moewalls.com/wp-content/uploads/2023/03/ninomae-inanis-winter-forest-virtual-youtuber-thumb.jpg), [ArtStation background 4](https://cdnb.artstation.com/p/assets/images/images/054/888/645/large/noah-who-ina-background-4.jpg?1665599243), and [ArtStation background 1](https://cdnb.artstation.com/p/assets/images/images/054/888/649/large/noah-who-ina-background-1.jpg?1665599247). Their reuse permissions remain [unverified]. The MoeWalls source page returned 404 during research. The [noah. portfolio](https://ubebop.artstation.com/) lists an Ina background collection; its association with these exact CDN files remains [unverified]. No lock image is downloaded or bundled. `lockscreen.sh --download-images` reports the missing permissions and refuses application. Supply three distinct approved, licensed local files through `--images` or `--asset-config` for the test-only model. Live rotation remains disabled until lock detection and restoration are tested. Sources: [selected records](dotfiles/image-sources.json) and [lock model](scripts/lib/components/lockscreen.py).
 
 ## Backups and restore
 
 Backups live under `$XDG_STATE_HOME/ina/backups/COMPONENT/manifest.json`, defaulting to `~/.local/state/ina/backups/COMPONENT/manifest.json`. Bash manifests use format `ina-bash-1`; retained Python components keep their earlier format. Manifests record original setting values, contents, permissions, and whether files existed. State directory mode is 700; manifest mode is 600. Sources: [Bash implementation](scripts/lib/shell-common.sh) and [Python implementation](scripts/lib/engine.py).
 
-The first Bash backup is retained across repeat applications. Restore an older Python backup before applying its Bash replacement. The restore tool uses Python for that recovery and archives the restored journal as `manifest.python-restored.json`. Firefox, VS Code, and lockscreen journals remain active in their original format. Sources: [restore routing](scripts/restore.sh) and [legacy archive handling](scripts/lib/engine.py). Gaming mode snapshots each run and retains prior run journals. Writes are atomic and operations share a lock. Symbolic-link targets and test paths outside `/tmp` are refused. Preview creates no backup, writes no configuration, launches no game, downloads nothing, and invokes no `sudo`. Source: [Bash implementation](scripts/lib/shell-common.sh). Runtime checks of this conversion are [unverified].
+The first Bash backup is retained across repeat applications. Restore an older Python backup before applying its Bash replacement. The restore tool uses Python for that recovery and archives the restored journal as `manifest.python-restored.json`. Firefox, VS Code, and lockscreen journals remain active in their original format. Sources: [restore routing](scripts/restore.sh) and [legacy archive handling](scripts/lib/engine.py). Gaming mode snapshots each run and retains prior run journals. Writes are atomic and operations share a lock. Symbolic-link targets and test paths outside `/tmp` are refused. Preview creates no backup, writes no configuration, launches no game, downloads nothing, and invokes no `sudo`. GRUB downloads require both explicit application and `--download-images --approved`. Source: [Bash implementation](scripts/lib/shell-common.sh). Runtime checks of this conversion are [unverified].
 
 ```bash
 bash Ina/scripts/restore.sh
@@ -115,10 +130,13 @@ GRUB preparation leaves the current boot configuration intact. Its manual activa
 After manually installing those exact files, remove only them and regenerate the menu to restore the previous override order:
 
 ```bash
-sudo rm -- /etc/default/grub.d/90-ina.cfg /boot/grub/themes/ina/theme.txt
-sudo rmdir -- /boot/grub/themes/ina
+sudo rm -- /etc/default/grub.d/90-ina.cfg /boot/grub/themes/ina/theme.txt /boot/grub/themes/ina/background.jpg /boot/grub/themes/ina/LICENSE /boot/grub/themes/ina/NOTICE
+sudo rm -- /boot/grub/themes/ina/selectors/selected_c.png /boot/grub/themes/ina/selectors/selected_e.png /boot/grub/themes/ina/selectors/selected_w.png
+sudo rmdir -- /boot/grub/themes/ina/selectors /boot/grub/themes/ina
 sudo update-grub
 ```
+
+Restore prepared user files separately with `bash Ina/scripts/restore.sh --component grub --apply`. This command does not remove manually installed boot files. Source: [restore implementation](scripts/restore.sh).
 
 If theme rendering blocks the GRUB menu, press `c`, enter `set theme=`, and press Esc. This procedure and the rendered theme are [unverified] until tested in a disposable VM. Do not activate the theme before that test. Source: [GRUB guidance](scripts/grub.sh).
 
