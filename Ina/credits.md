@@ -12,8 +12,8 @@
 | Nemo theme selector reference | Linux Mint mint-themes | [mint-themes](https://github.com/linuxmint/mint-themes) |
 | DMZ-White cursor | Novell, Inc.; installed dmz-cursor-theme package | [Source package copyright](https://sources.debian.org/src/dmz-cursor-theme/0.4.5/debian/copyright/) |
 | Cinnamon clock desklet | Linux Mint Cinnamon and contributors | [Clock desklet](https://github.com/linuxmint/cinnamon/tree/master/files/usr/share/cinnamon/desklets/clock%40cinnamon.org) |
-| Calendar desklet | Deep Pradhan, linuxmint/cinnamon-spices-desklets | [Calendar source](https://github.com/linuxmint/cinnamon-spices-desklets/tree/2b8413677a1d88e7259a4b5527d239dfe660dfc4/calendar%40deeppradhan) |
-| System Monitor Graph desklet | rcassani, linuxmint/cinnamon-spices-desklets | [System Monitor Graph source](https://github.com/linuxmint/cinnamon-spices-desklets/tree/2b8413677a1d88e7259a4b5527d239dfe660dfc4/system-monitor-graph%40rcassani) |
+| Calendar desklet | Deep Pradhan, linuxmint/cinnamon-spices-desklets | [Calendar source](https://github.com/linuxmint/cinnamon-spices-desklets/tree/2b8413677a1d88e7259a4b5527d239dfe660dfc4/calendar%40deeppradhan/files/calendar%40deeppradhan) |
+| System Monitor Graph desklet | rcassani, linuxmint/cinnamon-spices-desklets | [System Monitor Graph source](https://github.com/linuxmint/cinnamon-spices-desklets/tree/2b8413677a1d88e7259a4b5527d239dfe660dfc4/system-monitor-graph%40rcassani/files/system-monitor-graph%40rcassani) |
 | UPower interface snippet in System Monitor Graph | Schorschii, battery desklet | [Battery desklet source](https://github.com/linuxmint/cinnamon-spices-desklets/tree/2b8413677a1d88e7259a4b5527d239dfe660dfc4/battery%40schorschii) |
 | CPU utilization reference in System Monitor Graph | Rosetta Code | [Linux CPU utilization](https://rosettacode.org/wiki/Linux_CPU_utilization) |
 | Disk utilization reference in System Monitor Graph | Stack Overflow | [iostat utilization discussion](https://stackoverflow.com/questions/4458183/how-the-util-of-iostat-is-computed) |
