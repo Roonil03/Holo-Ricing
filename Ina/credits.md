@@ -22,6 +22,11 @@
 | Electroharmonix font used by `login_screen.sh` | Raymond Larabie / Typodermic Fonts, DaFont | [Electroharmonix](https://www.dafont.com/electroharmonix.font) |
 | Local Ninomae Ina'nis cursor archive used by `cursor-toggle.sh` | User-provided Downloads archive; original source and creator [unverified] | [Archive reference](scripts/cursor-toggle.sh) |
 | Takodachi text artwork used by `fastfetch.sh` and `neofetch.sh` | Existing project dotfiles; original source and creator [unverified] | [Fastfetch artwork](dotfiles/tako-ascii.txt), [Neofetch artwork](dotfiles/tako-ascii-neofetch.txt) |
+| GRUB background, Alpha Coders wallpaper 1123929 | mistimagi, Alpha Coders | [Original wallpaper](https://wall.alphacoders.com/big.php?i=1123929), [selected JPEG](https://images3.alphacoders.com/112/1123929.jpg) |
+| GRUB menu layout and three dark selection pieces | Aleph1-9012, Evangelion | [Reference design](https://www.gnome-look.org/p/2370768), [original menu](https://github.com/Aleph1-9012/Evangelion/blob/fb785c3009a9346173d4b893d6aa36dd22052335/themes/eva01/1080p/theme.txt), [selection pieces](https://github.com/Aleph1-9012/Evangelion/tree/fb785c3009a9346173d4b893d6aa36dd22052335/themes/eva01/1080p/selectors) |
+| Lock image 1, Ninomae Ina'nis winter forest thumbnail | MoeWalls; original artist [unverified] | [Selected thumbnail](https://moewalls.com/wp-content/uploads/2023/03/ninomae-inanis-winter-forest-virtual-youtuber-thumb.jpg), [source page](https://moewalls.com/anime/ninomae-inanis-winter-forest-virtual-youtuber-live-wallpaper/) |
+| Lock image 2, Ina background 4 | ArtStation; exact creator [unverified] | [Selected JPEG](https://cdnb.artstation.com/p/assets/images/images/054/888/645/large/noah-who-ina-background-4.jpg?1665599243), [artist portfolio](https://ubebop.artstation.com/) |
+| Lock image 3, Ina background 1 | ArtStation; exact creator [unverified] | [Selected JPEG](https://cdnb.artstation.com/p/assets/images/images/054/888/649/large/noah-who-ina-background-1.jpg?1665599247), [artist portfolio](https://ubebop.artstation.com/) |
 
 ## Legal notice
 
@@ -29,6 +34,8 @@ All third-party artwork, animations, fonts, themes, icons, cursors, and code ref
 
 Ninomae Ina'nis, hololive, and related names, character designs, and marks belong to their respective rights holders, including Cover Corp. This is an unofficial fan project and is not affiliated with, sponsored by, or endorsed by those rights holders. See [Cover's derivative works guidelines](https://hololivepro.com/en/terms/).
 
+The adapted GRUB menu and three selection pieces retain their [Apache 2.0 license](vendor/grub-evangelion/LICENSE) and [source and modification notice](vendor/grub-evangelion/NOTICE).
+
 The repository's [MIT license](../LICENSE) applies only to original project code unless a file states otherwise. Third-party license notices remain applicable, including the retained [Calendar license](vendor/desklets/calendar@deeppradhan/LICENSE) and [System Monitor Graph license](vendor/desklets/system-monitor-graph@rcassani/LICENSE).
 
-The linked Alpha Coders wallpaper is listed for private, personal use; other use requires contacting its artist. Redistribution rights for the GoodFon wallpaper and both Tenor GIFs are [unverified]. These credits do not authorize their redistribution or certify that use of any linked asset complies with applicable law. Consult each original source and rights holder before using an asset beyond its documented permissions.
+The linked Alpha Coders wallpapers are listed for private, personal use; other use requires contacting their artists. The newly selected GRUB background is downloaded only to a user-local directory, with explicit approval; it is not bundled in this repository. The three selected lock images are URL records only. Their reuse permissions remain [unverified], and their downloads are blocked. Redistribution rights for the GoodFon wallpaper and both Tenor GIFs are [unverified]. These credits do not authorize their redistribution or certify that use of any linked asset complies with applicable law. Consult each original source and rights holder before using an asset beyond its documented permissions.
