@@ -145,9 +145,9 @@ ShellCheck was unavailable and was not run. Visual appearance, full image decodi
 
 Live lock rotation is disabled. Cinnamon paints the user's desktop background on the saver; activation alone does not establish locking. The test-only model cycles exactly three approved images and restores the static image on unlock, exit, or session loss. It installs no service. Sources: [model](scripts/lib/components/lockscreen.py), [tests](tests/test_lockscreen.py), and [original screen-locker documentation](https://github.com/linuxmint/cinnamon-screensaver/blob/master/README.md).
 
-Soundbox is unavailable because its original license and media controls could not be verified. Calendar and System Monitor Graph retain separate licenses and the graph's recorded modification. Source: [credits](credits.md).
+Soundbox is unavailable because its original license and media controls could not be verified. Source: [widget component](scripts/lib/components/widgets.py). Calendar and System Monitor Graph retain their [Calendar](vendor/desklets/calendar@deeppradhan/LICENSE) and [System Monitor Graph](vendor/desklets/system-monitor-graph@rcassani/LICENSE) licenses. The modified [graph source](vendor/desklets/system-monitor-graph@rcassani/desklet.js) defers its first update until Cinnamon attaches its actor.
 
-Older `bootlogo.sh`, `cursor-toggle.sh`, `desktop-bg.sh`, `fastfetch.sh`, `login_screen.sh`, `neofetch.sh`, and `tiling-window.sh` are unchanged and excluded. They do not implement the new backup and preview requirements. Their artwork sources and redistribution permissions are [unverified]. Do not treat them as commands in this setup. Sources: the older scripts and [credits](credits.md#images-and-older-files).
+Older `bootlogo.sh`, `cursor-toggle.sh`, `desktop-bg.sh`, `fastfetch.sh`, `login_screen.sh`, `neofetch.sh`, and `tiling-window.sh` are unchanged and excluded. They do not implement the new backup and preview requirements. Original creators of some older artwork and its redistribution permissions remain [unverified]. Do not treat them as commands in this setup. Sources: the older scripts and [credits](credits.md).
 
 ## License and rights holders
 
