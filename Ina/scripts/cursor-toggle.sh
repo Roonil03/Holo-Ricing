@@ -1,5 +1,4 @@
 #!/bin/bash
-# 02-cursor-toggle.sh - Installs Ninomae Ina'nis cursor and sets up global WAH command
 
 echo "Installing Tako cursor..."
 if [ ! -d "$HOME/.icons/tako" ]; then

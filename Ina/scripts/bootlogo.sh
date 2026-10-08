@@ -1,5 +1,4 @@
 #!/bin/bash
-# 01-bootlogo.sh - Sets up a custom GIF for Plymouth boot logo
 
 echo "Installing required packages..."
 sudo apt-get install -y plymouth plymouth-themes imagemagick wget

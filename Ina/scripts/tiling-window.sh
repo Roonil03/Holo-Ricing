@@ -1,5 +1,4 @@
 #!/bin/bash
-# 04-tiling-window.sh - Sets up gTile for Cinnamon Window Tiling
 
 echo "Installing gTile Cinnamon extension..."
 

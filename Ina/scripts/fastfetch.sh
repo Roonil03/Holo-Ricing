@@ -1,5 +1,4 @@
 #!/bin/bash
-# 03-fastfetch.sh - Installs and configures fastfetch with a Tako ASCII art
 
 echo "Installing Fastfetch..."
 sudo add-apt-repository ppa:zhangsongcui3371/fastfetch -y

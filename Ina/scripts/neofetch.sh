@@ -1,5 +1,4 @@
 #!/bin/bash
-# 03-neofetch.sh - Installs and configures neofetch with a small Tako ASCII art
 
 echo "Installing Neofetch..."
 sudo apt-get install -y neofetch

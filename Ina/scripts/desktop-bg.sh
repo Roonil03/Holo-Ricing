@@ -1,5 +1,4 @@
 #!/bin/bash
-# 05-desktop-bg.sh - Downloads and applies a desktop background
 
 echo "Downloading Desktop Wallpaper... (Change URL to your preferred image)"
 BG_URL="https://images8.alphacoders.com/127/1279500.png"
