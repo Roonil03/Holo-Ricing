@@ -90,7 +90,8 @@ adopted_boot() {
 # Privileged code is kept in this file. It owns only the fixed Ina destinations.
 boot_operation() {
     ((EUID == 0)) || fail 'Internal boot operation requires root'
-    need install cmp flock update-grub cp stat rmdir dirname rm
+    need install cmp flock update-grub cp stat rmdir dirname rm mv date
+    local legacy=false archive
     local operation="$1" source_dir="${2:-}" adopt="${3:-false}" state=/var/lib/ina-rice-grub file destination
     local -a names=(theme.txt background.jpg LICENSE NOTICE selected_c.png selected_e.png selected_w.png 90-ina.cfg)
     plain_path "$state"; plain_path /boot/grub/themes/ina; plain_path /etc/default/grub.d/90-ina.cfg
@@ -114,6 +115,7 @@ boot_operation() {
     if [[ -f "$state/ready" && -f "$state/files/selectors/selected_c.png" ]]; then
         [[ "$operation" == restore ]] || fail 'Previous GRUB layout detected. Restore it before installing the revised theme.'
         names=(theme.txt background.jpg LICENSE NOTICE selectors/selected_c.png selectors/selected_e.png selectors/selected_w.png 90-ina.cfg)
+        legacy=true
     fi
     if [[ "$operation" == install ]]; then
         plain_path "$source_dir"
@@ -166,6 +168,15 @@ boot_operation() {
         if [[ -f "$state/default-dir.before" && -d /etc/default/grub.d ]]; then rmdir --ignore-fail-on-non-empty -- /etc/default/grub.d; fi
     fi
     update-grub || fail "update-grub failed. Use the printed recovery and fallback commands. Backup: $state"
+    if "$legacy" && [[ "$operation" == restore ]]; then
+        archive="$state.legacy-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+        plain_path "$archive"
+        [[ ! -e "$archive" && ! -L "$archive" ]] || fail "Legacy backup destination already exists: $archive"
+        mv -T --no-clobber -- "$state" "$archive" || fail "Could not archive legacy backup: $state"
+        [[ "$archive/lock" -ef "/proc/self/fd/$boot_lock" ]] || fail "Legacy backup was not moved; inspect $state and $archive"
+        printf 'Archived legacy boot backup: %s\n' "$archive"
+        printf 'Generated-menu fallback: sudo cp -p -- %q /boot/grub/grub.cfg\n' "$archive/grub.cfg.before"
+    fi
     printf '%s\n' 'No automatic restart. Boot rendering and recovery remain [unverified].'
 }
 if [[ "${1:-}" == --internal-grub ]]; then
