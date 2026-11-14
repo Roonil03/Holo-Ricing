@@ -88,11 +88,24 @@ adopted_boot() {
     grub-script-check /boot/grub/grub.cfg || fail "Generated GRUB configuration failed validation. Use the printed recovery and fallback commands. Backup: $state"
     printf '%s\n' 'No automatic restart. Boot rendering and recovery remain [unverified].'
 }
+# Archive only after restoration and configuration validation succeed. Keep every
+# generation, including adopted originals, for manual recovery.
+archive_boot_journal() {
+    local state="$1" archive="$1.restored-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+    plain_path "$archive"
+    [[ ! -e "$archive" && ! -L "$archive" ]] || fail "Backup destination already exists: $archive"
+    mv -T --no-clobber -- "$state" "$archive" || fail "Could not archive boot backup: $state"
+    [[ "$archive/lock" -ef "/proc/self/fd/$boot_lock" ]] || fail "Backup was not moved; inspect $state and $archive"
+    printf 'Archived boot backup: %s\n' "$archive"
+    printf 'Generated-menu fallback: sudo cp -p -- %q /boot/grub/grub.cfg\n' "$archive/grub.cfg.before"
+    if [[ -f "$archive/adopted" ]]; then
+        printf 'Adopted original theme: %s\nAdopted original override: %s\n' "$archive/original/theme" "$archive/original/90-ina.cfg"
+    fi
+}
 # Privileged code is kept in this file. It owns only the fixed Ina destinations.
 boot_operation() {
     ((EUID == 0)) || fail 'Internal boot operation requires root'
     need install cmp flock update-grub grub-script-check cp stat rmdir dirname rm mv date
-    local legacy=false archive
     local operation="$1" source_dir="${2:-}" adopt="${3:-false}" state=/var/lib/ina-rice-grub file destination
     local -a names=(theme.txt background.jpg LICENSE NOTICE selected_c.png selected_e.png selected_w.png 90-ina.cfg)
     plain_path "$state"; plain_path /boot/grub/themes/ina; plain_path /etc/default/grub.d/90-ina.cfg
@@ -109,6 +122,7 @@ boot_operation() {
     flock -n "$boot_lock" || fail 'Another runner boot operation is active'
     if [[ -f "$state/adopted" || ( "$adopt" == true && ! -f "$state/ready" ) ]]; then
         adopted_boot "$operation" "$source_dir" "$state"
+        if [[ "$operation" == restore ]]; then archive_boot_journal "$state"; fi
         return
     fi
     # Older journals used a selectors subdirectory. Restore them using the
@@ -116,7 +130,6 @@ boot_operation() {
     if [[ -f "$state/ready" && -f "$state/files/selectors/selected_c.png" ]]; then
         [[ "$operation" == restore ]] || fail 'Previous GRUB layout detected. Restore it before installing the revised theme.'
         names=(theme.txt background.jpg LICENSE NOTICE selectors/selected_c.png selectors/selected_e.png selectors/selected_w.png 90-ina.cfg)
-        legacy=true
     fi
     if [[ "$operation" == install ]]; then
         plain_path "$source_dir"
@@ -170,14 +183,8 @@ boot_operation() {
     fi
     update-grub || fail "update-grub failed. Use the printed recovery and fallback commands. Backup: $state"
     grub-script-check /boot/grub/grub.cfg || fail "Generated GRUB configuration failed validation. Use the printed recovery and fallback commands. Backup: $state"
-    if "$legacy" && [[ "$operation" == restore ]]; then
-        archive="$state.legacy-$(date -u +%Y%m%dT%H%M%SZ)-$$"
-        plain_path "$archive"
-        [[ ! -e "$archive" && ! -L "$archive" ]] || fail "Legacy backup destination already exists: $archive"
-        mv -T --no-clobber -- "$state" "$archive" || fail "Could not archive legacy backup: $state"
-        [[ "$archive/lock" -ef "/proc/self/fd/$boot_lock" ]] || fail "Legacy backup was not moved; inspect $state and $archive"
-        printf 'Archived legacy boot backup: %s\n' "$archive"
-        printf 'Generated-menu fallback: sudo cp -p -- %q /boot/grub/grub.cfg\n' "$archive/grub.cfg.before"
+    if [[ "$operation" == restore ]]; then
+        archive_boot_journal "$state"
     fi
     printf '%s\n' 'No automatic restart. Boot rendering and recovery remain [unverified].'
 }
