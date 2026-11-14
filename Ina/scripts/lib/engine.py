@@ -77,12 +77,27 @@ class Context:
         self.config = self.home / '.config' if self.test else Path(os.environ.get('XDG_CONFIG_HOME', self.home / '.config'))
         self.data = self.home / '.local/share' if self.test else Path(os.environ.get('XDG_DATA_HOME', self.home / '.local/share'))
         self.state = self.test / 'state' if self.test else Path(os.environ.get('XDG_STATE_HOME', self.home / '.local/state')) / 'ina'
+        self.home = reject_links(self.home)
+        self.config = reject_links(self.config)
+        self.data = reject_links(self.data)
+        self.state = reject_links(self.state)
+        for path in (self.config, self.data):
+            if not path.is_relative_to(self.home):
+                raise Error(f'Configuration path is outside the user directory: {path}')
+        if not self.test and not self.state.is_relative_to(self.home):
+            raise Error('State directory must be beneath the user directory.')
         self.name = args.component
+        if not re.fullmatch(r'[a-z][a-z-]*', self.name):
+            raise Error('Invalid component name.')
         self.manifest_path = self.state / 'backups' / self.name / 'manifest.json'
         reject_links(self.manifest_path)
         self.manifest = json.loads(self.manifest_path.read_text()) if self.manifest_path.exists() else {'component': self.name, 'files': {}, 'settings': {}}
         self.palette = {key[4:]: value for key, value in os.environ.items() if key.startswith('INA_')}
         self.guard = None
+        self.run_files = {}
+        self.run_settings = {}
+        self.run_directories = set()
+        self.manifest_before = None
 
     def acquire(self):
         if self.dry:
@@ -99,7 +114,33 @@ class Context:
             raise Error('Another Ina operation is running.') from exc
         # Reload only after acquiring the lock.
         if self.manifest_path.exists():
-            self.manifest = json.loads(self.manifest_path.read_text())
+            self.manifest_before = self.manifest_path.read_bytes()
+            self.manifest = json.loads(self.manifest_before)
+
+    def rollback_run(self):
+        # Refuse to replace concurrent edits, even during failure recovery.
+        for path, (original, applied, mode) in self.run_files.items():
+            reject_links(path)
+            current = path.read_bytes() if path.exists() else None
+            if current not in (original, applied):
+                raise Error(f'File changed during failed operation: {path}')
+        for (schema, key), (original, applied) in self.run_settings.items():
+            if self.get(schema, key) not in (original, applied):
+                raise Error(f'Setting changed during failed operation: {schema}/{key}')
+        for path, (original, applied, mode) in reversed(list(self.run_files.items())):
+            if original is None:
+                path.unlink(missing_ok=True)
+            else:
+                atomic(path, original, mode)
+        for (schema, key), (original, applied) in self.run_settings.items():
+            self.put(schema, key, original)
+        if self.manifest_before is None:
+            self.manifest_path.unlink(missing_ok=True)
+        else:
+            atomic(self.manifest_path, self.manifest_before)
+        for path in sorted(self.run_directories, key=lambda p: len(p.parts), reverse=True):
+            if path.is_dir() and not any(path.iterdir()):
+                path.rmdir()
 
     def save(self):
         atomic(self.manifest_path, (json.dumps(self.manifest, indent=2) + '\n').encode())
@@ -143,6 +184,10 @@ class Context:
         if self.dry or current == wanted:
             return
         identity = schema + '/' + key
+        existing = self.manifest['settings'].get(identity)
+        if existing and current not in (existing['original'], existing['applied']):
+            raise Error(f'Setting changed since application: {identity}')
+        self.run_settings[(schema, key)] = (self.run_settings.get((schema, key), (current, wanted))[0], wanted)
         entry = self.manifest['settings'].setdefault(identity, {'schema': schema, 'key': key, 'original': current})
         entry['applied'] = wanted
         self.save()  # Persist recovery before changing anything.
@@ -162,6 +207,17 @@ class Context:
         print(f'File: {path}')
         if self.dry or current == content:
             return
+        existing = self.manifest['files'].get(str(path))
+        if existing and not block:
+            encoded = base64.b64encode(current).decode() if current is not None else None
+            if encoded not in (existing['original'], existing['applied']):
+                raise Error(f'File changed since application: {path}')
+        before = self.run_files.get(path, (current, None, stat.S_IMODE(path.stat().st_mode) if path.exists() else 0o600))
+        self.run_files[path] = (before[0], content, before[2])
+        directory = path.parent
+        while not directory.exists() and directory != self.home.parent:
+            self.run_directories.add(directory)
+            directory = directory.parent
         entry = self.manifest['files'].setdefault(str(path), {
             'original': base64.b64encode(current).decode() if current is not None else None,
             'mode': stat.S_IMODE(path.stat().st_mode) if path.exists() else None,
@@ -343,7 +399,16 @@ def main():
             raise Error('Apply desktop components from the tested Cinnamon X11 session.')
     ctx.acquire()
     ctx.recover()
-    module.run(ctx)
+    try:
+        module.run(ctx)
+    except BaseException:
+        if not ctx.dry:
+            try:
+                ctx.rollback_run()
+            except (Error, OSError, ValueError) as recovery_error:
+                print(f'Automatic recovery failed: {recovery_error}', file=sys.stderr)
+                ctx.recover()
+        raise
 
 
 if __name__ == '__main__':
