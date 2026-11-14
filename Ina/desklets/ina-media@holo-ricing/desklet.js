@@ -3,6 +3,7 @@ const Desklet = imports.ui.desklet;
 const Settings = imports.ui.settings;
 const Gio = imports.gi.Gio;
 const GLib = imports.gi.GLib;
+const Pango = imports.gi.Pango;
 const St = imports.gi.St;
 
 const PREFIX = 'org.mpris.MediaPlayer2.';
@@ -12,6 +13,17 @@ const PLAYER = 'org.mpris.MediaPlayer2.Player';
 function unpack(value) {
     while (value instanceof GLib.Variant) value = value.deep_unpack();
     return value;
+}
+
+// Keep untrusted player metadata bounded and on one line before rendering it.
+function boundedText(value) {
+    return value.slice(0, 512).replace(/[\uD800-\uDBFF]$/, '');
+}
+
+function displayText(value) {
+    value = unpack(value);
+    if (typeof value !== 'string') return '';
+    return boundedText(value).replace(/[\x00-\x1f\x7f-\x9f\u2028\u2029]+/g, ' ').trim();
 }
 
 function MediaDesklet(metadata, id) { this._init(metadata, id); }
@@ -26,8 +38,10 @@ MediaDesklet.prototype = {
         this.settings = new Settings.DeskletSettings(this, metadata.uuid, id);
         for (let key of ['background', 'foreground', 'accent'])
             this.settings.bindProperty(Settings.BindingDirection.IN, key, key, () => this.updateStyle());
-        this.box = new St.BoxLayout({vertical: true});
-        this.title = new St.Label({text: 'No media playing'});
+        this.box = new St.BoxLayout({vertical: true, width: 360});
+        this.title = new St.Label({text: 'No media playing', width: 340});
+        this.title.clutter_text.set_single_line_mode(true);
+        this.title.clutter_text.set_ellipsize(Pango.EllipsizeMode.END);
         this.box.add_actor(this.title);
         this.controls = new St.BoxLayout({vertical: false});
         this.buttons = {};
@@ -82,10 +96,11 @@ MediaDesklet.prototype = {
                             let active = players[0];
                             if (!active) { this.selected = null; this.title.set_text('No media player'); return; }
                             this.selected = active.name;
-                            let title = unpack(active.metadata['xesam:title']) || 'Unknown track';
-                            let artists = unpack(active.metadata['xesam:artist']) || [];
+                            let title = displayText(active.metadata['xesam:title']) || 'Unknown track';
+                            let artists = unpack(active.metadata['xesam:artist']);
                             if (!Array.isArray(artists)) artists = [];
-                            this.title.set_text((artists.length ? artists.join(', ') + ': ' : '') + title);
+                            artists = artists.slice(0, 8).map(displayText).filter(Boolean);
+                            this.title.set_text(boundedText((artists.length ? artists.join(', ') + ': ' : '') + title));
                         });
                 }
             });
