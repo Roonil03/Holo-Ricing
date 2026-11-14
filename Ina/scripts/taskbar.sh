@@ -24,12 +24,31 @@ for entry in "${INA_ARRAY[@]}"; do
 done
 heights+=("$panel_id:40")
 ina_array_read "$(ina_get org.cinnamon enabled-applets)"
+applets=("${INA_ARRAY[@]}")
+next_id="$(ina_get org.cinnamon next-applet-id)"
+[[ "$next_id" =~ ^[0-9]+$ && ${#next_id} -le 10 ]] || ina_error 'Unsupported next-applet-id'
+next_id=$((10#$next_id))
+((next_id <= 2147483647)) || ina_error 'Unsupported next-applet-id'
+# Include explicit IDs on every panel, including panels we otherwise preserve.
+for entry in "${applets[@]}"; do
+    [[ "$entry" =~ ^panel[0-9]+:(left|center|right):[0-9]+:[^:]+(:([0-9]+))?$ ]] || ina_error "Unsupported applet entry: $entry"
+    identity="${BASH_REMATCH[3]:-}"
+    if [[ -n "$identity" ]]; then
+        ((${#identity} <= 10)) || ina_error "Unsupported applet ID: $identity"
+        number=$((10#$identity))
+        ((number < 2147483647)) || ina_error "Applet ID is too large: $identity"
+        ((number < next_id)) || next_id=$((number + 1))
+    fi
+done
 others=() left=() center=() right=()
-for entry in "${INA_ARRAY[@]}"; do
+allocated=false
+for entry in "${applets[@]}"; do
     if [[ "$entry" != "panel$panel_id:"* ]]; then others+=("$entry"); continue; fi
-    IFS=: read -r panel zone position uuid identity extra <<< "$entry"
-    [[ -z "${extra:-}" && "$position" =~ ^[0-9]+$ && "$identity" =~ ^[0-9]+$ && "$zone" =~ ^(left|center|right)$ ]] ||
-        ina_error "Unsupported applet entry: $entry"
+    IFS=: read -r panel zone position uuid identity <<< "$entry"
+    if [[ -z "$identity" ]]; then
+        ((next_id < 2147483647)) || ina_error 'No applet IDs remain available'
+        identity="$next_id"; next_id=$((next_id + 1)); allocated=true
+    fi
     case "$uuid" in
         menu@cinnamon.org|grouped-window-list@cinnamon.org) zone=left ;;
         calendar@cinnamon.org) zone=center ;;
@@ -61,6 +80,7 @@ ina_begin
 ina_text "$INA_DATA/themes/Ina-Panel/cinnamon/cinnamon.css" "$css"$'\n' 644
 ina_setting org.cinnamon panels-enabled "$(ina_array "${panels[@]}")"
 ina_setting org.cinnamon panels-height "$(ina_array "${heights[@]}")"
+if "$allocated"; then ina_setting org.cinnamon next-applet-id "$next_id"; fi
 ina_setting org.cinnamon enabled-applets "$(ina_array "${layout[@]}")"
 ina_setting org.cinnamon.theme name "'Ina-Panel'"
 printf '%s\n' 'Other panels, custom applets, existing IDs, and clock formatting are retained.'

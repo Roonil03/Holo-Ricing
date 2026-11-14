@@ -189,7 +189,11 @@ ina_get() {
         if [[ -n "$result" ]]; then printf '%s' "$result"; return; fi
     fi
     ina_need gsettings
-    gsettings get "$schema" "$key"
+    if [[ -n "$INA_TEST" ]]; then
+        GSETTINGS_BACKEND=memory gsettings get "$schema" "$key"
+    else
+        gsettings get "$schema" "$key"
+    fi
 }
 ina_put() {
     local schema="$1" key="$2" value="$3" text
