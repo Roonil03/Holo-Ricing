@@ -10,10 +10,19 @@ ina_image_source() {
 }
 ina_jpeg() {
     local path="$1" header
-    ina_need od
+    ina_need od python3
     [[ -f "$path" && -r "$path" ]] || ina_error "Readable JPEG missing: $path"
     header="$(od -An -tx1 -N3 -- "$path" | tr -d ' \n')"
     [[ "$header" == ffd8ff ]] || ina_error "Expected a JPEG header: $path"
+    python3 - "$path" <<'PYIMAGE' || ina_error "JPEG could not be decoded: $path"
+import sys
+import gi
+gi.require_version('GdkPixbuf', '2.0')
+from gi.repository import GdkPixbuf
+image = GdkPixbuf.PixbufAnimation.new_from_file(sys.argv[1])
+if not image.is_static_image():
+    raise SystemExit('Animated images are unsupported')
+PYIMAGE
 }
 ina_download_image() {
     local destination="$1" parent available expected

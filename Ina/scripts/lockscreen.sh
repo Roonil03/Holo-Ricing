@@ -26,6 +26,11 @@ if ! "$INA_DRY"; then "$INA_APPROVED" || ina_error 'Image downloads require --ap
 jq -e '[.images[] | select(.role | startswith("lock-")) | .role] == ["lock-1", "lock-2", "lock-3"]' \
     "$SCRIPT_DIR/../dotfiles/image-sources.json" >/dev/null || ina_error 'Expected exactly three ordered lock sources'
 prepared="$INA_DATA/ina/lockscreen"
+# Keep the desktop selection when repeating image preparation without --image.
+if [[ -z "$INA_IMAGE" && -f "$prepared/assets.json" ]]; then
+    ina_path "$prepared/assets.json" >/dev/null
+    INA_IMAGE="$(jq -er '.desktop_image | select(type == "string")' "$prepared/assets.json")" || ina_error 'Invalid existing image configuration'
+fi
 ina_begin
 images=()
 for number in 1 2 3; do
