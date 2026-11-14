@@ -85,12 +85,13 @@ adopted_boot() {
         cp -p -- "$state/original/90-ina.cfg" "$override"
     fi
     update-grub || fail "update-grub failed. Use the printed recovery and fallback commands. Backup: $state"
+    grub-script-check /boot/grub/grub.cfg || fail "Generated GRUB configuration failed validation. Use the printed recovery and fallback commands. Backup: $state"
     printf '%s\n' 'No automatic restart. Boot rendering and recovery remain [unverified].'
 }
 # Privileged code is kept in this file. It owns only the fixed Ina destinations.
 boot_operation() {
     ((EUID == 0)) || fail 'Internal boot operation requires root'
-    need install cmp flock update-grub cp stat rmdir dirname rm mv date
+    need install cmp flock update-grub grub-script-check cp stat rmdir dirname rm mv date
     local legacy=false archive
     local operation="$1" source_dir="${2:-}" adopt="${3:-false}" state=/var/lib/ina-rice-grub file destination
     local -a names=(theme.txt background.jpg LICENSE NOTICE selected_c.png selected_e.png selected_w.png 90-ina.cfg)
@@ -168,6 +169,7 @@ boot_operation() {
         if [[ -f "$state/default-dir.before" && -d /etc/default/grub.d ]]; then rmdir --ignore-fail-on-non-empty -- /etc/default/grub.d; fi
     fi
     update-grub || fail "update-grub failed. Use the printed recovery and fallback commands. Backup: $state"
+    grub-script-check /boot/grub/grub.cfg || fail "Generated GRUB configuration failed validation. Use the printed recovery and fallback commands. Backup: $state"
     if "$legacy" && [[ "$operation" == restore ]]; then
         archive="$state.legacy-$(date -u +%Y%m%dT%H%M%SZ)-$$"
         plain_path "$archive"
@@ -186,16 +188,16 @@ if [[ "${1:-}" == --internal-grub ]]; then
     boot_operation "$3" "${4:-}" "${5:-false}"
     exit 0
 fi
-apply=false dry=false approved=false install_boot=false restore_boot=false adopt_boot=false chrome=false skip_code=false skip_firefox=false
-image='' settings='' profile=''; game=()
+apply=false dry=false approved=false install_boot=false restore_boot=false adopt_boot=false grub_only=false chrome=false skip_code=false skip_firefox=false
+image='' grub_image='' settings='' profile=''; game=()
 while (($#)); do
     case "$1" in
         --apply) apply=true; shift ;; --dry-run) dry=true; shift ;; --approved) approved=true; shift ;;
-        --install-grub) install_boot=true; shift ;; --adopt-existing-grub) adopt_boot=true; shift ;; --restore-grub) restore_boot=true; shift ;;
+        --install-grub) install_boot=true; shift ;; --grub-only) grub_only=true; shift ;; --adopt-existing-grub) adopt_boot=true; shift ;; --restore-grub) restore_boot=true; shift ;;
         --user-chrome) chrome=true; shift ;; --skip-vscode) skip_code=true; shift ;; --skip-firefox) skip_firefox=true; shift ;;
-        --desktop-image|--vscode-settings|--firefox-profile)
+        --desktop-image|--grub-image|--vscode-settings|--firefox-profile)
             (($# >= 2)) && [[ "$2" != --* && -n "$2" ]] || fail "Missing value for $1"
-            case "$1" in --desktop-image) image="$2" ;; --vscode-settings) settings="$2" ;; --firefox-profile) profile="$2" ;; esac
+            case "$1" in --desktop-image) image="$2" ;; --grub-image) grub_image="$2" ;; --vscode-settings) settings="$2" ;; --firefox-profile) profile="$2" ;; esac
             shift 2 ;;
         --) shift; game=("$@"); break ;;
         --help)
@@ -206,6 +208,7 @@ Apply all supported components: bash Ina/ina_rice.sh --apply --approved \
 Use --skip-vscode or --skip-firefox to explicitly omit an application.
 Relative input paths resolve from this file, not the current directory.
 Optional: --user-chrome, --install-grub, --adopt-existing-grub, or -- GAME ARGUMENTS.
+For boot only: --grub-only --install-grub [--grub-image PATH] --approved --apply
 GRUB activation uses sudo only with --install-grub. Preparation runs otherwise.
 Sudo invocation: sudo --preserve-env=DISPLAY,XAUTHORITY,DBUS_SESSION_BUS_ADDRESS,XDG_RUNTIME_DIR,XDG_SESSION_TYPE,XDG_CURRENT_DESKTOP,XDG_CONFIG_HOME,XDG_DATA_HOME,XDG_STATE_HOME bash Ina/ina_rice.sh [options]
 Restore boot files: sudo bash Ina/ina_rice.sh --restore-grub --apply
@@ -221,6 +224,8 @@ HELP
 done
 "$dry" && apply=false
 if "$adopt_boot" && ! "$install_boot"; then fail '--adopt-existing-grub requires --install-grub'; fi
+if "$grub_only" && ! "$install_boot"; then fail '--grub-only requires --install-grub'; fi
+if "$grub_only" && ((${#game[@]} > 0)); then fail '--grub-only cannot run a game'; fi
 need bash realpath dirname
 if "$restore_boot"; then
     if ! "$apply"; then printf 'Would restore runner-owned boot files using sudo bash %q --restore-grub --apply\n' "$SELF"; exit 0; fi
@@ -236,15 +241,16 @@ if ((EUID == 0)); then
     for key in DISPLAY XAUTHORITY DBUS_SESSION_BUS_ADDRESS XDG_RUNTIME_DIR XDG_SESSION_TYPE XDG_CURRENT_DESKTOP XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME; do
         [[ -z "${!key:-}" ]] || environment+=("$key=${!key}")
     done
-    if "$apply"; then
+    if "$apply" && ! "$grub_only"; then
         [[ "${XDG_SESSION_TYPE:-}" == x11 && "${XDG_CURRENT_DESKTOP:-}" == *Cinnamon* && -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]] || fail 'Preserve the Cinnamon environment using the sudo command shown by --help'
     fi
     # Rebuild arguments without shell evaluation. Desktop writes use this account.
     arguments=()
     if "$apply"; then arguments+=(--apply); else arguments+=(--dry-run); fi
-    "$approved" && arguments+=(--approved); "$install_boot" && arguments+=(--install-grub); "$adopt_boot" && arguments+=(--adopt-existing-grub)
+    "$approved" && arguments+=(--approved); "$install_boot" && arguments+=(--install-grub); "$adopt_boot" && arguments+=(--adopt-existing-grub); "$grub_only" && arguments+=(--grub-only)
     "$chrome" && arguments+=(--user-chrome); "$skip_code" && arguments+=(--skip-vscode); "$skip_firefox" && arguments+=(--skip-firefox)
     [[ -z "$image" ]] || arguments+=(--desktop-image "$image")
+    [[ -z "$grub_image" ]] || arguments+=(--grub-image "$grub_image")
     [[ -z "$settings" ]] || arguments+=(--vscode-settings "$settings")
     [[ -z "$profile" ]] || arguments+=(--firefox-profile "$profile")
     ((${#game[@]} == 0)) || arguments+=(-- "${game[@]}")
@@ -252,15 +258,19 @@ if ((EUID == 0)); then
 fi
 resolve() { local path="$1"; [[ "$path" == /* ]] || path="$SELF_DIR/$path"; plain_path "$path"; realpath -m -- "$path"; }
 [[ -z "$image" ]] || image="$(resolve "$image")"
+[[ -z "$grub_image" ]] || grub_image="$(resolve "$grub_image")"
 [[ -z "$settings" ]] || settings="$(resolve "$settings")"
 [[ -z "$profile" ]] || profile="$(resolve "$profile")"
 if "$apply"; then
     "$approved" || fail 'Applying images requires --approved'
-    [[ -n "$image" && -f "$image" ]] || fail 'Select an existing independent --desktop-image PATH'
-    "$skip_code" || [[ -n "$settings" ]] || fail 'Select --vscode-settings PATH or --skip-vscode'
-    "$skip_firefox" || [[ -n "$profile" && -d "$profile" ]] || fail 'Select --firefox-profile PATH or --skip-firefox'
+    if ! "$grub_only"; then
+        [[ -n "$image" && -f "$image" ]] || fail 'Select an existing independent --desktop-image PATH'
+        "$skip_code" || [[ -n "$settings" ]] || fail 'Select --vscode-settings PATH or --skip-vscode'
+        "$skip_firefox" || [[ -n "$profile" && -d "$profile" ]] || fail 'Select --firefox-profile PATH or --skip-firefox'
+    fi
 fi
 components=(icons window-controls widgets taskbar nemo animations wallpaper vscode firefox lockscreen grub)
+"$grub_only" && components=(grub)
 args_for() {
     args=()
     case "$1" in
@@ -272,7 +282,7 @@ args_for() {
         vscode) [[ -z "$settings" ]] || args+=(--settings "$settings") ;;
         firefox) [[ -z "$profile" ]] || args+=(--profile "$profile"); "$chrome" && args+=(--user-chrome) ;;
         lockscreen) args+=(--download-images --approved); [[ -z "$image" ]] || args+=(--image "$image") ;;
-        grub) args+=(--allow-boot-change --download-images --approved) ;;
+        grub) args+=(--allow-boot-change --approved); if [[ -n "$grub_image" ]]; then args+=(--image "$grub_image"); else args+=(--download-images); fi ;;
     esac
     return 0
 }
@@ -283,7 +293,7 @@ for component in "${components[@]}"; do
     [[ -f "$SCRIPTS/$component.sh" && ! -L "$SCRIPTS/$component.sh" ]] || fail "Component missing or linked: $component"
     selected+=("$component")
 done
-if "$install_boot"; then need sudo; fi
+if "$install_boot" && "$apply"; then need sudo; fi
 printf '%s\n' 'Excluded: older scripts, missing cursor.sh, live lock rotation, Soundbox, and restore/install helper entry points.'
 for component in "${selected[@]}"; do
     args_for "$component"
