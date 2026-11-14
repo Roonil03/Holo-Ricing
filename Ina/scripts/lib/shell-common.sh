@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 # Original MIT code. Shared Bash backup and restore handling.
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/widget-settings.sh"
 ina_error() { printf 'Error: %s\n' "$*" >&2; exit 1; }
 ina_need() {
     local name
@@ -328,6 +329,14 @@ ina_restore_records() {
             current="$(stat -c '%a' -- "$path")"
             [[ "$current" == "$mode" || "$current" == "$(jq -r '.applied_mode // .mode' <<< "$entry")" ]] || ina_error "File permissions changed externally: $path"
         fi
+        if [[ "$INA_COMPONENT" == widgets && "$path" == "$INA_CONFIG/cinnamon/spices/"*.json ]]; then
+            text='{}'; [[ ! -f "$path" ]] || text="$(cat -- "$path")"
+            entry="$(ina_widget_migrate_entry "$path" "$entry" "$text")"
+            INA_JSON="$(jq --arg p "$path" --argjson e "$entry" '.files[$p]=$e' <<< "$INA_JSON")"
+            if [[ -f "$path" ]]; then ina_widget_validate "$path" "$entry" "$text"
+            else jq -e '.original == null' <<< "$entry" >/dev/null || ina_error "Widget settings missing: $path"; fi
+            continue
+        fi
         marker="$(jq -r '.block_marker // ""' <<< "$entry")"
         if [[ -n "$marker" ]]; then
             ina_block_parts "$path" "$marker"; current="$INA_BLOCK_OWNED"
@@ -349,7 +358,13 @@ ina_restore_records() {
         printf 'Restore: %s\n' "$path"
         "$INA_DRY" && continue
         marker="$(jq -r '.block_marker // ""' <<< "$entry")"; mode="$(jq -r '.mode' <<< "$entry")"
-        if [[ -n "$marker" ]]; then
+        if jq -e '(.widget_values|type) == "object"' <<< "$entry" >/dev/null; then
+            [[ -f "$path" ]] || continue
+            text="$(cat -- "$path")"
+            original="$(ina_widget_prepare_restore "$path" "$entry" "$text")" || ina_error "Cannot restore widget settings: $path"
+            if jq -e '.remove' <<< "$original" >/dev/null; then rm -- "$path"
+            else text="$(jq '.content' <<< "$original")"; ina_atomic "$path" "$(ina_b64 "$text"$'\n')" "$mode"; fi
+        elif [[ -n "$marker" ]]; then
             ina_block_parts "$path" "$marker"
             ina_decode_text "$(jq -r '.block_original' <<< "$entry")"; original="$INA_TEXT"
             ina_decode_text "$(jq -r '.separator // ""' <<< "$entry")"; separator="$INA_TEXT"

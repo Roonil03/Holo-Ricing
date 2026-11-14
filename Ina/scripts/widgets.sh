@@ -4,16 +4,24 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/shell-common.sh"
 ina_init widgets "$@"
 ina_desktop
-printf '%s\n' 'Available: clock, calendar, system. Soundbox remains unavailable.'
+printf '%s\n' 'Available: clock, calendar, system, media.'
 if (("${#INA_WIDGETS[@]}" == 0)); then
-    "$INA_DRY" || ina_error 'Select widgets with --widgets clock calendar system'
+    "$INA_DRY" || ina_error 'Select widgets with --widgets clock calendar system media'
     exit 0
 fi
 ina_array_read "$(ina_get org.cinnamon enabled-desklets)"
-current=("${INA_ARRAY[@]}"); next=0
+current=("${INA_ARRAY[@]}")
+next="$(ina_get org.cinnamon next-desklet-id)"
+[[ "$next" =~ ^[0-9]+$ && ${#next} -le 10 ]] || ina_error 'Unsupported next-desklet-id'
+next=$((10#$next))
+((next <= 2147483647)) || ina_error 'Unsupported next-desklet-id'
+allocated=false
 for entry in "${current[@]}"; do
     [[ "$entry" =~ ^[^:]+:([0-9]+):-?[0-9]+:-?[0-9]+$ ]] || ina_error "Unsupported desklet entry: $entry"
-    identity="${BASH_REMATCH[1]}"; number=$((10#$identity))
+    identity="${BASH_REMATCH[1]}"
+    ((${#identity} <= 10)) || ina_error "Unsupported desklet ID: $identity"
+    number=$((10#$identity))
+    ((number < 2147483647)) || ina_error "Desklet ID is too large: $identity"
     ((number < next)) || next=$((number + 1))
 done
 # Validate all requested widgets before recording or changing any files.
@@ -22,6 +30,7 @@ for name in "${INA_WIDGETS[@]}"; do
         clock) source_theme=/usr/share/cinnamon/desklets/clock@cinnamon.org ;;
         calendar) source_theme="$SCRIPT_DIR/../vendor/desklets/calendar@deeppradhan" ;;
         system) source_theme="$SCRIPT_DIR/../vendor/desklets/system-monitor-graph@rcassani" ;;
+        media) source_theme="$SCRIPT_DIR/../desklets/ina-media@holo-ricing" ;;
         *) ina_error "Unavailable widget: $name" ;;
     esac
     schema_path="$(ina_path "$source_theme/settings-schema.json")"
@@ -42,13 +51,17 @@ for name in "${INA_WIDGETS[@]}"; do
         clock) uuid=clock@cinnamon.org; x=30; y=30; source_theme="/usr/share/cinnamon/desklets/$uuid" ;;
         calendar) uuid=calendar@deeppradhan; x=30; y=140; source_theme="$SCRIPT_DIR/../vendor/desklets/$uuid" ;;
         system) uuid=system-monitor-graph@rcassani; x=400; y=140; source_theme="$SCRIPT_DIR/../vendor/desklets/$uuid" ;;
+        media) uuid=ina-media@holo-ricing; x=400; y=380; source_theme="$SCRIPT_DIR/../desklets/$uuid" ;;
         *) ina_error "Unavailable widget: $name" ;;
     esac
     identity=''
     for entry in "${current[@]}"; do
         if [[ "$entry" == "$uuid:"* ]]; then IFS=: read -r _ identity _ _ <<< "$entry"; break; fi
     done
-    if [[ -z "$identity" ]]; then identity="$next"; next=$((next + 1)); current+=("$uuid:$identity:$x:$y"); fi
+    if [[ -z "$identity" ]]; then
+        ((next < 2147483647)) || ina_error 'No desklet IDs remain available'
+        identity="$next"; next=$((next + 1)); allocated=true; current+=("$uuid:$identity:$x:$y")
+    fi
     schema_path="$(ina_path "$source_theme/settings-schema.json")"
     [[ -f "$schema_path" ]] || ina_error "Widget schema missing: $schema_path"
     schema="$(cat -- "$schema_path")"
@@ -71,13 +84,15 @@ for name in "${INA_WIDGETS[@]}"; do
     case "$name" in
         clock) overrides="$(jq -n --arg c "$(rgb "$INA_ANCIENT_PARCHMENT")" '{"font-size":36,"text-color":$c,"use-custom-format":true,"date-format":"%H:%M"}')" ;;
         calendar) overrides="$(jq -n --arg c "$(rgb "$INA_ANCIENT_PARCHMENT")" --arg b "$(rgb "$INA_ABYSS")" --arg s "$(rgb "$INA_LAVENDER")" --arg a "$(rgb "$INA_SOFT_PEACH")" '{"colour-text":$c,"colour-background":$b,"colour-sundays":$s,"colour-saturdays":$a}')" ;;
+        media) overrides="$(jq -n --arg c "$(rgb "$INA_ANCIENT_PARCHMENT")" --arg b "$(rgb "$INA_ABYSS")" --arg a "$(rgb "$INA_ELDRITCH_TEAL")" '{"foreground":$c,"background":$b,"accent":$a}')" ;;
         system) overrides="$(jq -n --argjson schema "$schema" --arg c "$(rgba "$INA_ANCIENT_PARCHMENT")" --arg b "$(rgba "$INA_ABYSS")" --arg m "$(rgba "$INA_DEEP_VIOLET")" --arg l "$(rgba "$INA_ELDRITCH_TEAL")" '
             reduce ($schema|keys[]|select(startswith("line-color-"))) as $k
-            ({"refresh-interval":3,"text-color":$c,"background-color":$b,"midline-color":$m}; .[$k]=$l)')" ;;
+            ({"refresh-interval":2,"text-color":$c,"background-color":$b,"midline-color":$m}; .[$k]=$l)')" ;;
     esac
     settings="$(jq --argjson overrides "$overrides" 'reduce ($overrides|keys[]) as $k (.;
         if has($k) then .[$k].value=$overrides[$k] else error("Unsupported widget key: "+$k) end)' <<< "$settings")"
-    ina_text "$config" "$settings"$'\n'
+    ina_widget_write "$config" "$overrides" "$settings"
 done
+if "$allocated"; then ina_setting org.cinnamon next-desklet-id "$next"; fi
 ina_setting org.cinnamon enabled-desklets "$(ina_array "${current[@]}")"
 ina_finish
