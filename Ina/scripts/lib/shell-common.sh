@@ -87,7 +87,7 @@ ina_init() {
             else INA_IMAGE="$(jq -r '.desktop_image // ""' "$INA_ASSETS")"; fi
         fi
     fi
-    INA_FINISHED=false
+    INA_FINISHED=false INA_ROLLBACK_JSON='' INA_MANIFEST_BEFORE='' INA_MANIFEST_EXISTED=false
     source "$SCRIPT_DIR/../dotfiles/colors.sh"
 }
 ina_desktop() {
@@ -120,6 +120,9 @@ ina_track_dirs() {
         ina_user_path "$directory" >/dev/null
         [[ ! -e "$directory" ]] || ina_error "Not a directory: $directory"
         INA_JSON="$(jq --arg d "$directory" '.directories=((.directories // []) + [$d] | unique)' <<< "$INA_JSON")"
+        if [[ -n "${INA_ROLLBACK_JSON:-}" ]]; then
+            INA_ROLLBACK_JSON="$(jq --arg d "$directory" '.directories=((.directories // []) + [$d] | unique)' <<< "$INA_ROLLBACK_JSON")"
+        fi
         directory="$(dirname -- "$directory")"
     done
 }
@@ -143,6 +146,11 @@ ina_begin() {
     exec {INA_LOCK_FD}>"$INA_STATE/transaction.lock"
     flock -n "$INA_LOCK_FD" || ina_error 'Another Ina operation is running'
     ina_load
+    if [[ -f "$INA_MANIFEST" ]]; then
+        INA_MANIFEST_EXISTED=true
+        INA_MANIFEST_BEFORE="$(base64 -w0 -- "$INA_MANIFEST")"
+    fi
+    INA_ROLLBACK_JSON="$(jq -n --arg c "$INA_COMPONENT" '{format:"ina-bash-1",component:$c,files:{},settings:{}}')"
     trap 'ina_exit "$?"' EXIT
     trap 'exit 130' INT
     trap 'exit 143' TERM
@@ -152,12 +160,19 @@ ina_exit() {
     local status="$1"
     trap - EXIT INT TERM HUP
     if [[ -n "${INA_DOWNLOAD_TMP:-}" ]]; then rm -f -- "$INA_DOWNLOAD_TMP"; fi
-    if ! "$INA_FINISHED" && [[ -f "$INA_MANIFEST" ]]; then
-        printf '%s\n' 'Operation interrupted. Attempting restoration from the saved backup.' >&2
+    if ! "$INA_FINISHED" && [[ -n "${INA_ROLLBACK_JSON:-}" ]]; then
+        printf '%s\n' 'Operation interrupted. Restoring only changes from this invocation.' >&2
         local restore_status
         set +e
-        ( set -euo pipefail; ina_restore_records )
+        ( set -euo pipefail; INA_JSON="$INA_ROLLBACK_JSON"; ina_restore_records )
         restore_status="$?"
+        if ((restore_status == 0)); then
+            if "$INA_MANIFEST_EXISTED"; then
+                ina_atomic "$INA_MANIFEST" "$INA_MANIFEST_BEFORE" 600 || restore_status="$?"
+            elif [[ -f "$INA_MANIFEST" ]]; then
+                rm -- "$INA_MANIFEST" || restore_status="$?"
+            fi
+        fi
         set -e
         if ((restore_status != 0)); then
             printf 'Automatic restoration failed. Use: bash %q --component %q --apply\n' "$SCRIPT_DIR/restore.sh" "$INA_COMPONENT" >&2
@@ -197,6 +212,9 @@ ina_setting() {
     else original="$current"; fi
     [[ "$current" != "$wanted" ]] || return 0
     INA_JSON="$(jq --arg id "$id" --arg s "$schema" --arg k "$key" --arg o "$original" --arg a "$wanted" '.settings[$id]={schema:$s,key:$k,original:$o,applied:$a}' <<< "$INA_JSON")"
+    # Keep the current invocation separate from the first application backup.
+    INA_ROLLBACK_JSON="$(jq --arg id "$id" --arg s "$schema" --arg k "$key" --arg o "$current" --arg a "$wanted" '
+        .settings[$id] = {schema:$s,key:$k,original:(.settings[$id].original // $o),applied:$a}' <<< "$INA_ROLLBACK_JSON")"
     ina_save; ina_put "$schema" "$key" "$wanted"
 }
 ina_file() {
@@ -216,6 +234,10 @@ ina_file() {
     entry="$(jq --rawfile a <(printf '%s' "$content") --arg m "$mode" '.applied=$a | .applied_mode=$m' <<< "$entry")"
     INA_JSON="$(jq --arg p "$path" --slurpfile e <(printf '%s' "$entry") '.files[$p]=$e[0]' <<< "$INA_JSON")"
     ina_track_dirs "$path"
+    local rollback_mode="$mode"
+    [[ ! -f "$path" ]] || rollback_mode="$(stat -c '%a' -- "$path")"
+    INA_ROLLBACK_JSON="$(jq --arg p "$path" --slurpfile o <(printf '%s' "$current") --rawfile a <(printf '%s' "$content") --arg m "$rollback_mode" --arg am "$mode" '
+        .files[$p] = {original:(if .files|has($p) then .files[$p].original else $o[0] end),applied:$a,mode:$m,applied_mode:$am}' <<< "$INA_ROLLBACK_JSON")"
     ina_save
     if [[ "$current" != "$(printf '%s' "$content" | jq -Rs .)" || "$(stat -c '%a' -- "$path" 2>/dev/null || true)" != "$mode" ]]; then ina_atomic "$path" "$content" "$mode"; fi
 }
@@ -279,6 +301,8 @@ ina_block() {
     entry="$(jq --arg marker "$marker" --arg a "$(ina_b64 "$content")" '.block_marker=$marker | .block_applied=$a' <<< "$entry")"
     INA_JSON="$(jq --arg p "$path" --argjson e "$entry" '.files[$p]=$e' <<< "$INA_JSON")"
     ina_track_dirs "$path"
+    INA_ROLLBACK_JSON="$(jq --arg p "$path" --arg marker "$marker" --arg o "$(ina_b64 "$current")" --arg a "$(ina_b64 "$content")" --arg m "$mode" --arg sep "$(ina_b64 "$separator")" --argjson exists "$existed" '
+        .files[$p] = {block_original:(.files[$p].block_original // $o),block_applied:$a,block_marker:$marker,mode:$m,existed:$exists,separator:$sep}' <<< "$INA_ROLLBACK_JSON")"
     ina_save
     [[ "$current" != "$content" ]] || return 0
     ina_atomic "$path" "$(ina_b64 "$before$separator$content$after")" "$mode"
