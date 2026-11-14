@@ -6,14 +6,28 @@ import errno
 import fcntl
 import os
 import stat
+import ipaddress
 from engine import Error, reject_links
+
+
+def stale_local_lock(marker):
+    if not marker.is_symlink() or marker.lstat().st_uid != os.getuid():
+        return False
+    host, separator, owner = os.readlink(marker).rpartition(':')
+    if not separator or not re.fullmatch(r'\+?[1-9][0-9]{0,9}', owner):
+        return False
+    try:
+        local = ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+    return local and not Path('/proc', owner.lstrip('+')).exists()
 
 
 def require_unlocked(ctx, profile):
     # Legacy lock symlinks can encode a live host and PID; treat them conservatively.
     for name in ('lock', 'parent.lock'):
         marker = profile / name
-        if marker.exists() or marker.is_symlink():
+        if (marker.exists() or marker.is_symlink()) and not stale_local_lock(marker):
             raise Error('Firefox profile has a lock marker. Close Firefox and inspect it before retrying.')
     marker = profile / '.parentlock'
     if marker.is_symlink():
