@@ -3,7 +3,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/shell-common.sh"
 ina_init install "$@"
-available=(icons window-controls widgets vscode firefox gaming-mode wallpaper cursor taskbar nemo animations grub lockscreen)
+available=(icons window-controls widgets vscode firefox gaming-mode wallpaper taskbar nemo animations grub lockscreen)
 printf '%s\n' 'Ina components. Nothing is selected by default.'
 for index in "${!available[@]}"; do printf '%d. %s\n' "$((index + 1))" "${available[index]}"; done
 if (("${#INA_COMPONENTS[@]}" == 0)) && [[ -t 0 ]] && ! "$INA_EXPLICIT_DRY"; then
@@ -35,7 +35,7 @@ for name in "${INA_COMPONENTS[@]}"; do
             wallpaper) [[ -n "$INA_IMAGE" ]] && "$INA_APPROVED" || ina_error 'Wallpaper requires --image PATH --approved' ;;
             grub)
                 "$INA_BOOT" && "$INA_APPROVED" || ina_error 'GRUB requires --allow-boot-change --approved'
-                "$INA_DOWNLOAD" || [[ -n "$INA_ASSETS" && "$(jq -r '.grub_image // ""' "$INA_ASSETS")" != '' ]] || ina_error 'GRUB requires --download-images or a configured grub_image'
+                "$INA_DOWNLOAD" || [[ -n "$INA_ASSETS" && "$(jq -r '.grub_image // ""' "$INA_ASSETS")" != '' ]] || { [[ -n "$INA_IMAGE" && -z "$INA_ASSETS" && ${#INA_COMPONENTS[@]} -eq 1 ]] || ina_error 'GRUB requires --download-images, a configured grub_image, or --image when selected alone'; }
                 ;;
             gaming-mode) (("${#INA_COMMAND[@]}" > 0)) || ina_error 'Gaming mode requires a command after --' ;;
         esac
@@ -58,11 +58,13 @@ component_args() {
         wallpaper) [[ -z "$INA_IMAGE" ]] || args+=(--image "$INA_IMAGE"); "$INA_APPROVED" && args+=(--approved) ;;
         widgets) (("${#INA_WIDGETS[@]}" == 0)) || args+=(--widgets "${INA_WIDGETS[@]}") ;;
         lockscreen)
+            [[ -z "$INA_IMAGE" ]] || args+=(--image "$INA_IMAGE")
             "$INA_DOWNLOAD" && args+=(--download-images)
             "$INA_APPROVED" && args+=(--approved)
             [[ -z "$INA_ASSETS" ]] || args+=(--asset-config "$INA_ASSETS")
             ;;
         grub)
+            if [[ -n "$INA_IMAGE" && ${#components[@]} -eq 1 && -z "$INA_ASSETS" ]] && ! "$INA_DOWNLOAD"; then args+=(--image "$INA_IMAGE"); fi
             "$INA_BOOT" && args+=(--allow-boot-change)
             "$INA_APPROVED" && args+=(--approved)
             "$INA_DOWNLOAD" && args+=(--download-images)

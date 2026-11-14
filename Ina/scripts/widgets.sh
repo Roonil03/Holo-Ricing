@@ -16,6 +16,23 @@ for entry in "${current[@]}"; do
     identity="${BASH_REMATCH[1]}"; number=$((10#$identity))
     ((number < next)) || next=$((number + 1))
 done
+# Validate all requested widgets before recording or changing any files.
+for name in "${INA_WIDGETS[@]}"; do
+    case "$name" in
+        clock) source_theme=/usr/share/cinnamon/desklets/clock@cinnamon.org ;;
+        calendar) source_theme="$SCRIPT_DIR/../vendor/desklets/calendar@deeppradhan" ;;
+        system) source_theme="$SCRIPT_DIR/../vendor/desklets/system-monitor-graph@rcassani" ;;
+        *) ina_error "Unavailable widget: $name" ;;
+    esac
+    schema_path="$(ina_path "$source_theme/settings-schema.json")"
+    [[ -f "$schema_path" ]] || ina_error "Widget schema missing: $schema_path"
+    jq -e 'type=="object"' "$schema_path" >/dev/null || ina_error "Invalid widget schema: $schema_path"
+    if [[ "$name" != clock ]]; then
+        for file in desklet.js metadata.json settings-schema.json LICENSE; do
+            [[ -f "$source_theme/$file" ]] || ina_error "Widget file missing: $source_theme/$file"
+        done
+    fi
+done
 declare -A seen=()
 ina_begin
 for name in "${INA_WIDGETS[@]}"; do
