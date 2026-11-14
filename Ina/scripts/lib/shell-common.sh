@@ -241,7 +241,7 @@ ina_file() {
     local rollback_mode="$mode"
     [[ ! -f "$path" ]] || rollback_mode="$(stat -c '%a' -- "$path")"
     INA_ROLLBACK_JSON="$(jq --arg p "$path" --slurpfile o <(printf '%s' "$current") --rawfile a <(printf '%s' "$content") --arg m "$rollback_mode" --arg am "$mode" '
-        .files[$p] = {original:(if .files|has($p) then .files[$p].original else $o[0] end),applied:$a,mode:$m,applied_mode:$am}' <<< "$INA_ROLLBACK_JSON")"
+        .files[$p] = {original:(if .files|has($p) then .files[$p].original else $o[0] end),applied:$a,mode:(.files[$p].mode // $m),applied_mode:$am}' <<< "$INA_ROLLBACK_JSON")"
     ina_save
     if [[ "$current" != "$(printf '%s' "$content" | jq -Rs .)" || "$(stat -c '%a' -- "$path" 2>/dev/null || true)" != "$mode" ]]; then ina_atomic "$path" "$content" "$mode"; fi
 }
@@ -306,7 +306,7 @@ ina_block() {
     INA_JSON="$(jq --arg p "$path" --argjson e "$entry" '.files[$p]=$e' <<< "$INA_JSON")"
     ina_track_dirs "$path"
     INA_ROLLBACK_JSON="$(jq --arg p "$path" --arg marker "$marker" --arg o "$(ina_b64 "$current")" --arg a "$(ina_b64 "$content")" --arg m "$mode" --arg sep "$(ina_b64 "$separator")" --argjson exists "$existed" '
-        .files[$p] = {block_original:(.files[$p].block_original // $o),block_applied:$a,block_marker:$marker,mode:$m,existed:$exists,separator:$sep}' <<< "$INA_ROLLBACK_JSON")"
+        .files[$p] = {block_original:(.files[$p].block_original // $o),block_applied:$a,block_marker:$marker,mode:(.files[$p].mode // $m),existed:(if .files|has($p) then .files[$p].existed else $exists end),separator:(.files[$p].separator // $sep)}' <<< "$INA_ROLLBACK_JSON")"
     ina_save
     [[ "$current" != "$content" ]] || return 0
     ina_atomic "$path" "$(ina_b64 "$before$separator$content$after")" "$mode"
