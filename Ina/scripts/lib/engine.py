@@ -20,10 +20,10 @@ class Error(Exception):
     pass
 
 
-def checked(command):
+def checked(command, env=None):
     if not shutil.which(command[0]):
         raise Error(f"Required command missing: {command[0]}")
-    result = subprocess.run(command, text=True, capture_output=True)
+    result = subprocess.run(command, text=True, capture_output=True, env=env)
     if result.returncode:
         raise Error(f"{shlex.join(command)} failed: {result.stderr.strip()}")
     return result.stdout.strip()
@@ -151,7 +151,7 @@ class Context:
             values = json.loads(path.read_text()) if path.exists() else {}
             if schema + '/' + key in values:
                 return values[schema + '/' + key]
-        return checked(['gsettings', 'get', schema, key])
+        return checked(['gsettings', 'get', schema, key], env=dict(os.environ, GSETTINGS_BACKEND='memory') if self.test else None)
 
     def value(self, schema, key):
         text = self.get(schema, key)
