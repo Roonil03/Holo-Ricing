@@ -3,7 +3,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/shell-common.sh"
 ina_init install "$@"
-available=(icons window-controls widgets vscode firefox gaming-mode wallpaper taskbar nemo animations grub lockscreen)
+available=(icons window-controls widgets vscode firefox gaming-mode wallpaper cursor taskbar nemo animations grub lockscreen)
 printf '%s\n' 'Ina components. Nothing is selected by default.'
 for index in "${!available[@]}"; do printf '%d. %s\n' "$((index + 1))" "${available[index]}"; done
 if (("${#INA_COMPONENTS[@]}" == 0)) && [[ -t 0 ]] && ! "$INA_EXPLICIT_DRY"; then
