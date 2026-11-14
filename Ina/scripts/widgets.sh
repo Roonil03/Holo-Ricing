@@ -43,6 +43,7 @@ for name in "${INA_WIDGETS[@]}"; do
     fi
 done
 declare -A seen=()
+reloads=()
 ina_begin
 for name in "${INA_WIDGETS[@]}"; do
     [[ -z "${seen[$name]:-}" ]] || continue
@@ -58,7 +59,9 @@ for name in "${INA_WIDGETS[@]}"; do
     for entry in "${current[@]}"; do
         if [[ "$entry" == "$uuid:"* ]]; then IFS=: read -r _ identity _ _ <<< "$entry"; break; fi
     done
+    existing=true
     if [[ -z "$identity" ]]; then
+        existing=false
         ((next < 2147483647)) || ina_error 'No desklet IDs remain available'
         identity="$next"; next=$((next + 1)); allocated=true; current+=("$uuid:$identity:$x:$y")
     fi
@@ -67,6 +70,15 @@ for name in "${INA_WIDGETS[@]}"; do
     schema="$(cat -- "$schema_path")"
     jq -e 'type=="object"' <<< "$schema" >/dev/null
     if [[ "$name" != clock ]]; then
+        if "$existing"; then
+            for file in desklet.js settings-schema.json; do
+                installed="$(ina_user_path "$INA_DATA/cinnamon/desklets/$uuid/$file")"
+                if [[ ! -f "$installed" ]] || ! cmp -s -- "$source_theme/$file" "$installed"; then
+                    reloads+=("$uuid")
+                    break
+                fi
+            done
+        fi
         [[ -f "$source_theme/LICENSE" ]] || ina_error 'Desklet license missing'
         for file in desklet.js metadata.json settings-schema.json LICENSE; do ina_copy "$source_theme/$file" "$INA_DATA/cinnamon/desklets/$uuid/$file"; done
     fi
@@ -96,3 +108,23 @@ done
 if "$allocated"; then ina_setting org.cinnamon next-desklet-id "$next"; fi
 ina_setting org.cinnamon enabled-desklets "$(ina_array "${current[@]}")"
 ina_finish
+# Reload only after the file/settings transaction is committed. A failed refresh
+# must leave the journal intact so the user can retry or restore safely.
+reload_failed=false
+for uuid in "${reloads[@]}"; do
+    printf 'Reload desklet: %s\n' "$uuid"
+    if "$INA_DRY" || [[ -n "$INA_TEST" ]]; then continue; fi
+    if ! command -v gdbus >/dev/null 2>&1; then
+        printf 'Required command not found: gdbus\n' >&2
+    elif ! gdbus call --session --dest org.Cinnamon --object-path /org/Cinnamon \
+        --method org.Cinnamon.ReloadXlet "$uuid" DESKLET; then
+        :
+    else
+        continue
+    fi
+    printf 'Desklet files were saved, but reload failed. Retry: gdbus call --session --dest org.Cinnamon --object-path /org/Cinnamon --method org.Cinnamon.ReloadXlet %q DESKLET\n' "$uuid" >&2
+    printf 'Recovery: bash %q --component widgets --apply\n' "$SCRIPT_DIR/restore.sh" >&2
+    reload_failed=true
+done
+"$reload_failed" && exit 1
+exit 0

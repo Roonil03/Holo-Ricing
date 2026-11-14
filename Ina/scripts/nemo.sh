@@ -14,11 +14,12 @@ ina_setting org.nemo.window-state start-with-toolbar true
 ina_setting org.nemo.window-state start-with-location-bar true
 css="$(cat <<EOF
 /* Ina Nemo begin */
-.nemo-window, .nemo-window .view { background-color: $INA_ABYSS; color: $INA_ANCIENT_PARCHMENT; }
-.nemo-window .sidebar, .nemo-window .sidebar .view { background-color: $INA_DEEP_VIOLET; color: $INA_MUTED_TEXT; }
-.nemo-window .view:selected, .nemo-window .sidebar .view:selected { background-color: $INA_DEEP_VIOLET; color: $INA_ANCIENT_PARCHMENT; border-color: $INA_TENTACLE_PURPLE; }
-.nemo-window toolbar { background-image: none; background-color: $INA_DEEP_VIOLET; color: $INA_ANCIENT_PARCHMENT; }
-.nemo-window entry:focus { border-color: $INA_ELDRITCH_TEAL; }
+/* Nemo desktop windows inherit nemo-window; keep wallpaper and desktop labels theme-controlled. */
+.nemo-window:not(.nemo-desktop-window), .nemo-window:not(.nemo-desktop-window) .view { background-color: $INA_ABYSS; color: $INA_ANCIENT_PARCHMENT; }
+.nemo-window:not(.nemo-desktop-window) .sidebar, .nemo-window:not(.nemo-desktop-window) .sidebar .view { background-color: $INA_DEEP_VIOLET; color: $INA_MUTED_TEXT; }
+.nemo-window:not(.nemo-desktop-window) .view:selected, .nemo-window:not(.nemo-desktop-window) .sidebar .view:selected { background-color: $INA_DEEP_VIOLET; color: $INA_ANCIENT_PARCHMENT; border-color: $INA_TENTACLE_PURPLE; }
+.nemo-window:not(.nemo-desktop-window) toolbar { background-image: none; background-color: $INA_DEEP_VIOLET; color: $INA_ANCIENT_PARCHMENT; }
+.nemo-window:not(.nemo-desktop-window) entry:focus { border-color: $INA_ELDRITCH_TEAL; }
 /* Ina Nemo end */
 EOF
 )"
