@@ -27,7 +27,11 @@ for name in "${INA_COMPONENTS[@]}"; do
     if ! "$INA_DRY"; then
         case "$name" in
             lockscreen)
-                "$INA_DOWNLOAD" && "$INA_APPROVED" || ina_error 'Select --download-images --approved to prepare lock images. Live rotation remains unavailable.'
+                if "$INA_FORCE_LOCK"; then
+                    [[ -n "$INA_ASSETS" ]] && "$INA_APPROVED" && ! "$INA_DOWNLOAD" || ina_error 'Live rotation requires --asset-config PATH --approved --force-lock-on-activation, without --download-images'
+                else
+                    "$INA_DOWNLOAD" && "$INA_APPROVED" || ina_error 'Select --download-images --approved for preparation, or --force-lock-on-activation --asset-config PATH --approved for live rotation'
+                fi
                 ;;
             vscode) [[ -n "$INA_SETTINGS" ]] || ina_error 'VS Code requires --settings PATH' ;;
             firefox) [[ -n "$INA_PROFILE" ]] || ina_error 'Firefox requires --profile PATH' ;;
@@ -58,6 +62,7 @@ component_args() {
         wallpaper) [[ -z "$INA_IMAGE" ]] || args+=(--image "$INA_IMAGE"); "$INA_APPROVED" && args+=(--approved) ;;
         widgets) (("${#INA_WIDGETS[@]}" == 0)) || args+=(--widgets "${INA_WIDGETS[@]}") ;;
         lockscreen)
+            "$INA_FORCE_LOCK" && args+=(--force-lock-on-activation)
             [[ -z "$INA_IMAGE" ]] || args+=(--image "$INA_IMAGE")
             "$INA_DOWNLOAD" && args+=(--download-images)
             "$INA_APPROVED" && args+=(--approved)

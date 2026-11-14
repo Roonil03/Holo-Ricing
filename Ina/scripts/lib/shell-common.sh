@@ -26,7 +26,7 @@ ina_user_path() {
 ina_init() {
     INA_COMPONENT="$1"; shift
     INA_APPLY=false INA_DRY=true INA_DESKTOP=false INA_APPROVED=false INA_BOOT=false INA_EXPLICIT_DRY=false
-    INA_IMAGE='' INA_ASSETS='' INA_TEST='' INA_RESTORE='' INA_POWER='' INA_SETTINGS='' INA_PROFILE='' INA_CHROME=false INA_DOWNLOAD=false
+    INA_IMAGE='' INA_ASSETS='' INA_TEST='' INA_RESTORE='' INA_POWER='' INA_SETTINGS='' INA_PROFILE='' INA_CHROME=false INA_DOWNLOAD=false INA_FORCE_LOCK=false
     INA_COMPONENTS=() INA_WIDGETS=() INA_COMMAND=()
     while (($#)); do
         case "$1" in
@@ -36,6 +36,7 @@ ina_init() {
             --approved) INA_APPROVED=true; shift ;;
             --allow-boot-change) INA_BOOT=true; shift ;;
             --download-images) INA_DOWNLOAD=true; shift ;;
+            --force-lock-on-activation) INA_FORCE_LOCK=true; shift ;;
             --user-chrome) INA_CHROME=true; shift ;;
             --image|--asset-config|--test-root|--component|--power-profile|--settings|--profile)
                 (($# >= 2)) && [[ "$2" != --* && -n "$2" ]] || ina_error "Missing value for $1"
