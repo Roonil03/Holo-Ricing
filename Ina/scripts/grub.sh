@@ -29,10 +29,27 @@ if [[ -n "$image" ]]; then
 else
     ina_download_image "$prepared/background.jpg"
 fi
+# GRUB's JPEG reader supports baseline JPEG, not progressive JPEG.
+# Keep the source untouched and journal the normalized prepared file.
+if ! "$INA_DRY"; then
+    ina_need convert
+    interlace="$(convert -regard-warnings "$prepared/background.jpg" -format '%[interlace]' info:)" || ina_error 'Cannot decode GRUB JPEG'
+    if [[ "$interlace" != None ]]; then
+        INA_DOWNLOAD_TMP="$(mktemp "$INA_STATE/.grub-jpeg-XXXXXX.jpg")"
+        if ! convert "$prepared/background.jpg" -interlace none "$INA_DOWNLOAD_TMP"; then
+            rm -f -- "$INA_DOWNLOAD_TMP"
+            ina_error 'Cannot convert GRUB image to baseline JPEG'
+        fi
+        [[ "$(convert -regard-warnings "$INA_DOWNLOAD_TMP" -format '%[interlace]' info:)" == None ]] || ina_error 'Converted GRUB JPEG is not baseline'
+        ina_copy "$INA_DOWNLOAD_TMP" "$prepared/background.jpg" 644
+        rm -f -- "$INA_DOWNLOAD_TMP"
+        INA_DOWNLOAD_TMP=''
+    fi
+fi
 ina_text "$prepared/theme.txt" "$theme"$'\n' 644
 ina_text "$prepared/90-ina.cfg" $'# Original Ina override. Loaded after /etc/default/grub.\nGRUB_THEME=\'/boot/grub/themes/ina/theme.txt\'\n' 644
 for name in selected_c.png selected_e.png selected_w.png; do
-    ina_copy "$vendor/selectors/$name" "$prepared/selectors/$name" 644
+    ina_copy "$vendor/selectors/$name" "$prepared/$name" 644
 done
 ina_copy "$vendor/LICENSE" "$prepared/LICENSE" 644
 ina_copy "$vendor/NOTICE" "$prepared/NOTICE" 644
@@ -41,17 +58,17 @@ printf '%s\n' 'User files only. Preview at the intended resolution with grub-emu
     'Rendered theme and real boot recovery remain [unverified]. Manual activation requires unused destinations:' \
     'test ! -e /boot/grub/themes/ina && test ! -e /etc/default/grub.d/90-ina.cfg' \
     'Stop if that check fails. Preserve any existing files instead of overwriting them.' \
-    'sudo install -d -m 755 /boot/grub/themes/ina/selectors /etc/default/grub.d'
+    'sudo install -d -m 755 /boot/grub/themes/ina /etc/default/grub.d'
 for name in theme.txt background.jpg LICENSE NOTICE; do
     printf 'sudo install -m 644 %q %q\n' "$prepared/$name" "/boot/grub/themes/ina/$name"
 done
 for name in selected_c.png selected_e.png selected_w.png; do
-    printf 'sudo install -m 644 %q %q\n' "$prepared/selectors/$name" "/boot/grub/themes/ina/selectors/$name"
+    printf 'sudo install -m 644 %q %q\n' "$prepared/$name" "/boot/grub/themes/ina/$name"
 done
 printf 'sudo install -m 644 %q /etc/default/grub.d/90-ina.cfg\n' "$prepared/90-ina.cfg"
 printf '%s\n' 'sudo update-grub' 'Recovery after installing those exact files:' \
     'sudo rm -- /etc/default/grub.d/90-ina.cfg /boot/grub/themes/ina/theme.txt /boot/grub/themes/ina/background.jpg /boot/grub/themes/ina/LICENSE /boot/grub/themes/ina/NOTICE' \
-    'sudo rm -- /boot/grub/themes/ina/selectors/selected_c.png /boot/grub/themes/ina/selectors/selected_e.png /boot/grub/themes/ina/selectors/selected_w.png' \
-    'sudo rmdir -- /boot/grub/themes/ina/selectors /boot/grub/themes/ina' 'sudo update-grub' \
+    'sudo rm -- /boot/grub/themes/ina/selected_c.png /boot/grub/themes/ina/selected_e.png /boot/grub/themes/ina/selected_w.png' \
+    'sudo rmdir -- /boot/grub/themes/ina' 'sudo update-grub' \
     'At the GRUB prompt: set theme=, then Esc. This recovery procedure is [unverified]. No automatic restart.'
 ina_finish
