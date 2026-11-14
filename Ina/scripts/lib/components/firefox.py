@@ -128,10 +128,21 @@ def run(ctx):
         original_css = chrome.read_text() if chrome.exists() else ''
         original_css = re.sub(r'/\* Ina chrome begin \*/.*?/\* Ina chrome end \*/\n?', '', original_css, flags=re.DOTALL)
         added_css = f'''/* Ina chrome begin */
+:root {{
+  color-scheme: dark !important;
+  --toolbar-field-background-color: {p['DEEP_VIOLET']} !important;
+  --toolbar-field-focus-background-color: {p['DEEP_VIOLET']} !important;
+  --toolbar-field-color: {p['ANCIENT_PARCHMENT']} !important;
+  --toolbar-field-focus-color: {p['ANCIENT_PARCHMENT']} !important;
+  --toolbar-field-border-color: {p['TENTACLE_PURPLE']} !important;
+  --toolbar-field-focus-border-color: {p['ELDRITCH_TEAL']} !important;
+  --focus-outline-color: {p['ELDRITCH_TEAL']} !important;
+}}
 #navigator-toolbox, #TabsToolbar, #nav-bar {{ background: {p['ABYSS']} !important; color: {p['ANCIENT_PARCHMENT']} !important; }}
-#urlbar-background, .tab-background[selected] {{ background: {p['DEEP_VIOLET']} !important; }}
-#urlbar-input, .tab-label {{ color: {p['ANCIENT_PARCHMENT']} !important; }}
-#urlbar[focused] > #urlbar-background {{ border-color: {p['ELDRITCH_TEAL']} !important; }}
+#urlbar-background, .urlbar-background, #searchbar, .tab-background[selected] {{ background: {p['DEEP_VIOLET']} !important; }}
+#urlbar-input, .urlbar-input, .tab-label {{ color: {p['ANCIENT_PARCHMENT']} !important; }}
+#urlbar-input::placeholder {{ color: {p['MUTED_TEXT']} !important; opacity: 1 !important; }}
+#urlbar[focused] > #urlbar-background, #urlbar[focused] > .urlbar-background {{ border-color: {p['ELDRITCH_TEAL']} !important; outline-color: {p['ELDRITCH_TEAL']} !important; }}
 /* Ina chrome end */
 '''
         ctx.file(chrome, original_css.rstrip('\n') + '\n' + added_css)
