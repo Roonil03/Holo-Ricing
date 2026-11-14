@@ -395,3 +395,29 @@ ina_array() {
     for item in "$@"; do printf '%s' "$separator"; ina_quote "$item"; separator=', '; done
     printf ']'
 }
+
+ina_check_image() {
+    local path="$1" native source_hash installed_hash
+    native="$(ina_user_path "$INA_DATA/ina/bin/image-check")"
+    if [[ -x "$native" && -f "$native.source" ]]; then
+        ina_path "$native.source" >/dev/null
+        ina_need sha256sum
+        source_hash="$(sha256sum < "$SCRIPT_DIR/../src/image-check.c")"
+        installed_hash="$(cat -- "$native.source")"
+        if [[ "$installed_hash" == "${source_hash:0:64}" ]]; then
+            "$native" --check "$path"
+            return
+        fi
+    fi
+    # Keep previews and an unbuilt checkout usable without writing a binary.
+    ina_need python3
+    python3 - "$path" <<'PYIMAGE'
+import sys
+import gi
+gi.require_version('GdkPixbuf', '2.0')
+from gi.repository import GdkPixbuf
+image = GdkPixbuf.PixbufAnimation.new_from_file(sys.argv[1])
+if not image.is_static_image():
+    raise SystemExit('Select a static image')
+PYIMAGE
+}

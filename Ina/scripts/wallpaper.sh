@@ -18,16 +18,7 @@ case "$header" in
     89504e470d0a1a0a*|ffd8ff*|474946383761*|474946383961*|52494646????????57454250*) ;;
     *) ina_error 'Expected a PNG, JPEG, GIF, or WebP header' ;;
 esac
-ina_need python3
-python3 - "$image" <<'PYIMAGE' || ina_error 'Image could not be decoded'
-import sys
-import gi
-gi.require_version('GdkPixbuf', '2.0')
-from gi.repository import GdkPixbuf
-image = GdkPixbuf.PixbufAnimation.new_from_file(sys.argv[1])
-if not image.is_static_image():
-    raise SystemExit("Select a static image")
-PYIMAGE
+ina_check_image "$image" || ina_error 'Image could not be decoded'
 uri="$(jq -rn --arg p "$image" '$p|split("/")|map(@uri)|join("/")')"
 ina_begin
 ina_setting org.cinnamon.desktop.background.slideshow slideshow-enabled false
