@@ -2,7 +2,7 @@
 import json
 import sys
 from pathlib import Path
-from engine import Error, atomic, checked, reject_links
+from engine import Error, atomic, reject_links
 
 DESKTOP = True
 SOURCES = Path(__file__).resolve().parents[3] / 'dotfiles' / 'image-sources.json'
@@ -18,28 +18,38 @@ def approved_image(path, approved):
         header = stream.read(16)
     if not (header.startswith(b'\x89PNG\r\n\x1a\n') or header.startswith(b'\xff\xd8\xff') or header[:6] in (b'GIF87a', b'GIF89a') or (header[:4] == b'RIFF' and header[8:12] == b'WEBP')):
         raise Error(f'Expected a PNG, JPEG, GIF, or WebP image: {path}')
+    try:
+        import gi
+        gi.require_version('GdkPixbuf', '2.0')
+        from gi.repository import GdkPixbuf
+        image = GdkPixbuf.PixbufAnimation.new_from_file(str(path))
+        if not image.is_static_image():
+            raise Error("Select a static image")
+    except Exception as exc:
+        raise Error(f'Image could not be decoded: {path}: {exc}') from exc
     return path
-
 
 
 class Rotation:
     def __init__(self, ctx, images, desktop):
         self.ctx, self.images, self.desktop = ctx, images, desktop
-        self.state = ctx.state / 'lock-rotation.json'
+        self.state = reject_links(ctx.state / 'lock-rotation.json')
         self.index = json.loads(self.state.read_text())['next_index'] if self.state.exists() else 0
-        if not isinstance(self.index, int) or not 0 <= self.index < 3:
+        if type(self.index) is not int or not 0 <= self.index < 3:
             raise Error('Invalid lock rotation state; preserve it and restore wallpaper manually.')
         self.locked = False
 
     def event(self, event):
         if event == 'locked':
-            self.locked = True
-            self.advance()
+            if not self.locked:
+                self.locked = True
+                self.advance()
         elif event == 'tick' and self.locked:
             self.advance()
         elif event in ('unlocked', 'lost-session', 'exit'):
-            self.locked = False
-            self.ctx.setting('org.cinnamon.desktop.background', 'picture-uri', self.desktop.as_uri())
+            if self.locked:
+                self.ctx.setting('org.cinnamon.desktop.background', 'picture-uri', self.desktop.as_uri())
+                self.locked = False
         elif event != 'tick':
             raise Error('Unsupported lock event.')
 
@@ -72,10 +82,17 @@ def run(ctx):
             raise Error('Required approved image paths are empty.')
         return
     validate = approved_image
+    if not isinstance(ctx.args.images, list) or len(ctx.args.images) != 3 or not all(isinstance(path, str) and path for path in ctx.args.images):
+        raise Error('Supply exactly three lock image paths.')
+    if not isinstance(ctx.args.image, str):
+        raise Error('Supply a desktop image path.')
     desktop = validate(ctx.args.image, ctx.args.approved)
     images = [validate(path, ctx.args.approved) for path in ctx.args.images]
-    if len({(path.stat().st_dev, path.stat().st_ino) for path in images}) != 3 or len(set(images)) != 3:
+    identities = [(path.stat().st_dev, path.stat().st_ino) for path in images]
+    if len(set(identities)) != 3:
         raise Error('Supply exactly three distinct lock images, including no hard-link duplicates.')
+    if (desktop.stat().st_dev, desktop.stat().st_ino) in identities:
+        raise Error('The static desktop image must be independent of the lock images.')
     print('Rotation order: ' + ', '.join(str(p) for p in images) + '. Interval: 300 seconds while locked.')
     print('Restore static desktop: ' + str(desktop))
     if not ctx.test:
@@ -86,5 +103,9 @@ def run(ctx):
         return
     model = Rotation(ctx, images, desktop)
     # Test-only events. The default round trip finishes with the static image.
-    for event in ctx.args.simulate_events or ['locked', 'tick', 'tick', 'unlocked']:
-        model.event(event)
+    try:
+        for event in ctx.args.simulate_events or ['locked', 'tick', 'tick', 'unlocked']:
+            model.event(event)
+    finally:
+        if model.locked:
+            model.event('exit')
