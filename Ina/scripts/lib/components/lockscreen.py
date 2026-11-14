@@ -1,6 +1,11 @@
-"""Original MIT code. Rotation model stays disabled on the live desktop."""
+"""Lock wallpaper setup and isolated rotation model."""
 import json
+import os
+import base64
+import secrets
+import stat
 import sys
+import subprocess
 from pathlib import Path
 from engine import Error, atomic, reject_links
 
@@ -65,6 +70,118 @@ class Rotation:
             atomic(self.state, content.encode())
 
 
+def unit_arg(value):
+    # systemd unit syntax, including percent specifier expansion.
+    value = str(value).replace('%', '%%').replace('\\', '\\\\').replace('"', '\\"')
+    if any(c in value for c in ('\n', '\r', '\0')):
+        raise Error('Invalid path for service unit.')
+    return '"' + value + '"'
+
+
+def install_service(ctx, images, desktop):
+    worker = ctx.data / 'ina/lockscreen/lockscreen-worker.py'
+    config = ctx.config / 'ina/lockscreen-service.json'
+    unit = ctx.config / 'systemd/user/ina-lockscreen.service'
+    state = reject_links(ctx.state / 'lock-rotation-live.json')
+    lock_path = reject_links(ctx.state / 'lock-rotation-live.lock')
+    source = Path(__file__).resolve().parents[1] / 'lockscreen-worker.py'
+    if lock_path.exists():
+        info = lock_path.stat()
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or
+                stat.S_IMODE(info.st_mode) != 0o600 or info.st_nlink != 1 or info.st_size):
+            raise Error('Rotation lock must be an empty private user-owned file.')
+    if unit.exists() and str(unit) not in ctx.manifest['files']:
+        raise Error(f'Refusing to replace an unowned service unit: {unit}')
+    prior = ctx.manifest.get('live_rotation')
+    token = prior['token'] if prior else secrets.token_hex(16)
+    initialize_state = not prior
+    if prior:
+        if prior['path'] != str(state):
+            raise Error('Unexpected rotation state path in backup.')
+        current = state.read_bytes() if state.exists() else None
+        original = base64.b64decode(prior['original']) if prior['original'] is not None else None
+        initialize_state = current == original
+        if not initialize_state:
+            data = json.loads(current)
+            if set(data) != {'token', 'next_index'} or data['token'] != token or type(data['next_index']) is not int or not 0 <= data['next_index'] < 3:
+                raise Error('Rotation state changed externally.')
+    text = json.dumps({'desktop_image': str(desktop), 'lock_images': [str(p) for p in images],
+                       'state': str(state), 'token': token, 'lock_path': str(lock_path)}, indent=2) + '\n'
+    command = ' '.join(unit_arg(p) for p in ('/usr/bin/python3', worker, config))
+    unit_text = ('[Unit]\nDescription=Ina lockscreen wallpaper rotation\n'
+                 'After=graphical-session-pre.target\n\n[Service]\nType=simple\n'
+                 f'ExecStartPre={command} --check\nExecStart={command}\nExecStopPost={command} --restore\n'
+                 'KillMode=process\nRestart=on-failure\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n')
+    managed = bool(ctx.manifest.get('service_managed'))
+    # Never execute an externally edited unit or its ExecStopPost helper.
+    for path in (lock_path, worker, config, unit):
+        path = reject_links(path)
+        entry = ctx.manifest['files'].get(str(path))
+        if entry:
+            current = base64.b64encode(path.read_bytes()).decode() if path.exists() else None
+            if current not in (entry['original'], entry['applied']):
+                raise Error(f'File changed since application: {path}')
+    if not ctx.dry and not managed:
+        for command_name in ('is-active', 'is-enabled'):
+            if subprocess.run(['systemctl', '--user', command_name, '--quiet', 'ina-lockscreen.service']).returncode == 0:
+                raise Error('Refusing to take over an existing lockscreen service.')
+    previous_active = False
+    if not ctx.dry and managed:
+        previous_active = subprocess.run(['systemctl', '--user', 'is-active', '--quiet', 'ina-lockscreen.service']).returncode == 0
+        previous_enabled = subprocess.run(['systemctl', '--user', 'is-enabled', '--quiet', 'ina-lockscreen.service']).returncode == 0
+        if previous_active:
+            result = subprocess.run(['systemctl', '--user', 'stop', 'ina-lockscreen.service'], text=True, capture_output=True)
+            if result.returncode:
+                raise Error('Could not stop existing lockscreen service: ' + result.stderr.strip())
+        if previous_active or previous_enabled:
+            def restart_previous():
+                subprocess.run(['systemctl', '--user', 'daemon-reload'], check=True)
+                if previous_enabled:
+                    subprocess.run(['systemctl', '--user', 'enable', 'ina-lockscreen.service'], check=True)
+                if previous_active:
+                    subprocess.run(['systemctl', '--user', 'start', 'ina-lockscreen.service'], check=True)
+            ctx.rollback_callback = restart_previous
+    try:
+        if not ctx.dry and initialize_state:
+            original = state.read_bytes() if state.exists() else None
+            mode = stat.S_IMODE(state.stat().st_mode) if state.exists() else 0o600
+            if not prior:
+                ctx.manifest['live_rotation'] = {'path': str(state), 'token': token,
+                    'original': base64.b64encode(original).decode() if original is not None else None, 'mode': mode}
+            initial = json.dumps({'token': token, 'next_index': 0}).encode()
+            ctx.run_files[state] = (original, initial, mode)
+            ctx.save()
+            atomic(state, initial, 0o600)
+        ctx.file(lock_path, b'', 0o600)
+        ctx.file(worker, source.read_bytes(), 0o700)
+        ctx.file(config, text, 0o600)
+        ctx.file(unit, unit_text, 0o600)
+        ctx.setting('org.cinnamon.desktop.screensaver', 'lock-enabled', True)
+        ctx.setting('org.cinnamon.desktop.background.slideshow', 'slideshow-enabled', False)
+        ctx.setting('org.cinnamon.desktop.background', 'picture-uri', desktop.as_uri())
+        if ctx.dry:
+            print('Would enable and start ina-lockscreen.service.')
+            return
+        ctx.manifest['service_managed'] = True
+        ctx.save()
+        for args in (['systemctl', '--user', 'daemon-reload'],
+                     ['systemctl', '--user', 'enable', '--now', 'ina-lockscreen.service']):
+            result = subprocess.run(args, text=True, capture_output=True)
+            if result.returncode:
+                raise Error(f"Service setup failed: {result.stderr.strip()}.")
+    except BaseException:
+        if not ctx.dry:
+            subprocess.run(['systemctl', '--user', 'disable', '--now', 'ina-lockscreen.service'], capture_output=True)
+            if state in ctx.run_files and state.exists():
+                current = state.read_bytes()
+                data = json.loads(current)
+                if set(data) == {'token', 'next_index'} and data['token'] == token and type(data['next_index']) is int and 0 <= data['next_index'] < 3:
+                    original, _, mode = ctx.run_files[state]
+                    ctx.run_files[state] = (original, current, mode)
+        raise
+    print('Enabled ina-lockscreen.service. Active screensavers will be locked immediately.')
+
+
 def run(ctx):
     # Network downloads are prepared separately by the Bash entry point.
     sources = json.loads(SOURCES.read_text())['images']
@@ -74,8 +191,7 @@ def run(ctx):
     for item in lock_sources:
         print(f"Selected {item['role']}: {item['url']}")
         print(f"Local download name: {item['filename']}")
-    print('Live rotation unavailable: this Cinnamon interface exposes ActiveChanged, which does not prove the session is locked.')
-    print('No user service is installed or enabled until reliable lock-state detection and unlock restoration pass an isolated session test.')
+    print('Live mode explicitly locks every active screensaver before rotation.')
     if not ctx.args.images or not ctx.args.image:
         print('Required paths: exactly three approved lock images and one approved static desktop image.')
         if not ctx.dry:
@@ -96,8 +212,12 @@ def run(ctx):
     print('Rotation order: ' + ', '.join(str(p) for p in images) + '. Interval: 300 seconds while locked.')
     print('Restore static desktop: ' + str(desktop))
     if not ctx.test:
-        if not ctx.dry:
-            raise Error('Live rotation remains disabled because reliable lock-state detection is unverified.')
+        if not ctx.args.force_lock_on_activation:
+            if not ctx.dry:
+                raise Error('Live rotation requires --force-lock-on-activation: an active screensaver will be locked immediately.')
+            print('Live setup requires --force-lock-on-activation.')
+            return
+        install_service(ctx, images, desktop)
         return
     if ctx.dry:
         return

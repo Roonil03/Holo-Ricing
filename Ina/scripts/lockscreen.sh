@@ -10,7 +10,9 @@ for argument in "$@"; do
                 'Download selected images: --download-images --apply --approved' \
                 'Optional: --asset-config PATH or --image PATH for the independent desktop image.' \
                 'Preparation downloads only user-local files. It does not enable live rotation.' \
-                'Without --download-images, use --images PATH PATH PATH --image PATH --approved for the test-only model.' \
+                'Live setup: --asset-config PATH --approved --force-lock-on-activation --apply --apply-desktop.' \
+                'This locks the screensaver immediately whenever it becomes active.' \
+                'Use --test-root PATH for isolated simulation.' \
                 'Restore prepared images: restore.sh --component lockscreen-images --apply'
             exit 0 ;;
     esac
@@ -46,7 +48,7 @@ printf 'Image configuration: %s\n' "$prepared/assets.json"
 if "$INA_DRY"; then printf '%s\n' 'Preview only. Three images would be prepared in the selected order.'
 else printf '%s\n' 'Three images prepared in the selected order.'; fi
 printf '%s\n' 'Interval for the test-only model: 300 seconds.' \
-    'Select an independent static desktop image in assets.json before using the model.' \
-    'Live rotation remains disabled until lock-state detection and restoration are tested.' \
+    'Select an independent static desktop image in assets.json before enabling rotation.' \
+    'Live setup requires --force-lock-on-activation and explicitly locks each active screensaver.' \
     'No wallpaper, login-screen setting, service, or boot file was changed.'
 ina_finish
