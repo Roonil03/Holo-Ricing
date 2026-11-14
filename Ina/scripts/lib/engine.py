@@ -9,6 +9,7 @@ import os
 import re
 from pathlib import Path
 import shlex
+import signal
 import shutil
 import stat
 import subprocess
@@ -18,6 +19,16 @@ import tempfile
 
 class Error(Exception):
     pass
+
+
+class Interrupted(Error):
+    def __init__(self, number):
+        super().__init__(f'Interrupted by signal {number}; recovery was attempted.')
+        self.status = 128 + number
+
+
+def interrupt(number, _frame):
+    raise Interrupted(number)
 
 
 def checked(command, env=None):
@@ -253,6 +264,30 @@ def block_pattern(marker):
     return r'\n?/\* ' + re.escape(marker) + r' begin \*/.*?/\* ' + re.escape(marker) + r' end \*/\n?'
 
 
+def live_rotation_restore(ctx, manifest):
+    details = manifest.get('live_rotation')
+    if not details:
+        return None
+    path = reject_links(details['path'])
+    if path != ctx.state / 'lock-rotation-live.json':
+        raise Error('Unexpected live rotation state path in backup.')
+    original = details['original']
+    original = base64.b64decode(original, validate=True) if original is not None else None
+    mode = details['mode']
+    if not isinstance(mode, int) or isinstance(mode, bool) or not 0 <= mode <= 0o777:
+        raise Error('Invalid live rotation backup permissions.')
+    current = path.read_bytes() if path.exists() else None
+    if current is None and original is not None:
+        raise Error('Live rotation state was removed outside Ina; preserve the backup before restoring.')
+    if current is not None and current != original:
+        state = json.loads(current)
+        if (not isinstance(state, dict) or set(state) != {'token', 'next_index'} or
+                state['token'] != details['token'] or type(state['next_index']) is not int or
+                not 0 <= state['next_index'] < 3):
+            raise Error('Live rotation state changed outside Ina; preserve it before restoring.')
+    return path, original, mode
+
+
 def restore(ctx, component):
     path = reject_links(ctx.state / 'backups' / component / 'manifest.json')
     if not path.exists():
@@ -264,6 +299,7 @@ def restore(ctx, component):
         ctx.manifest, ctx.manifest_path = manifest, path
         restore_run(ctx)
         return
+    live_rotation = live_rotation_restore(ctx, manifest) if component == 'lockscreen' else None
     extra = None
     if component == 'firefox':
         from components.firefox import prepare_restore
@@ -272,7 +308,8 @@ def restore(ctx, component):
     blocks = {}
     for name, entry in manifest['files'].items():
         file = reject_links(name)
-        if not file.is_relative_to(ctx.home):
+        rotation_lock = component == 'lockscreen' and file == ctx.state / 'lock-rotation-live.lock'
+        if not file.is_relative_to(ctx.home) and not rotation_lock:
             raise Error(f'Backup contains a path outside the user directory: {file}')
         current = base64.b64encode(file.read_bytes()).decode() if file.exists() else None
         if 'block_marker' in entry:
@@ -303,6 +340,12 @@ def restore(ctx, component):
                 rotation.unlink(missing_ok=True)
             else:
                 atomic(rotation, manifest['rotation_original'].encode())
+    if live_rotation and not ctx.dry:
+        state_path, original, mode = live_rotation
+        if original is None:
+            state_path.unlink(missing_ok=True)
+        else:
+            atomic(state_path, original, mode)
     for name, entry in manifest['files'].items():
         print(f'Restore: {name}')
         if not ctx.dry:
@@ -338,6 +381,7 @@ def parser():
     p.add_argument('--asset-config')
     p.add_argument('--simulate-events', nargs='+', choices=['locked', 'tick', 'unlocked', 'lost-session', 'exit'])
     p.add_argument('--approved', action='store_true')
+    p.add_argument('--force-lock-on-activation', action='store_true')
     p.add_argument('--widgets', nargs='+')
     p.add_argument('--components', nargs='+')
     p.add_argument('--allow-boot-change', action='store_true')
@@ -405,7 +449,10 @@ def main():
         if not ctx.dry:
             try:
                 ctx.rollback_run()
-            except (Error, OSError, ValueError) as recovery_error:
+                callback = getattr(ctx, 'rollback_callback', None)
+                if callback is not None:
+                    callback()
+            except (Error, OSError, ValueError, subprocess.SubprocessError) as recovery_error:
                 print(f'Automatic recovery failed: {recovery_error}', file=sys.stderr)
                 ctx.recover()
         raise
@@ -413,8 +460,13 @@ def main():
 
 if __name__ == '__main__':
     sys.modules['engine'] = sys.modules[__name__]
+    for number in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+        signal.signal(number, interrupt)
     try:
         main()
-    except (Error, OSError, ValueError, KeyError, ImportError) as error:
+    except Interrupted as error:
+        print(f'Error: {error}', file=sys.stderr)
+        sys.exit(error.status)
+    except (Error, OSError, ValueError, KeyError, ImportError, TypeError) as error:
         print(f'Error: {error}', file=sys.stderr)
         sys.exit(1)
