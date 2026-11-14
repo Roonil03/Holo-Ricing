@@ -17,31 +17,7 @@ if ! "$INA_DRY"; then
     command -v "${INA_COMMAND[0]}" >/dev/null 2>&1 || ina_error 'Chosen command is unavailable'
 fi
 ina_begin
-if ! "$INA_DRY"; then
-    jq -e '.gaming_active != true' <<< "$INA_JSON" >/dev/null || ina_error 'An interrupted gaming run requires restore before another run'
-    # Retain the prior run journal before starting a fresh snapshot.
-    if [[ -f "$INA_MANIFEST" ]]; then
-        archive="$INA_BACKUP/run-$(date -u +%Y%m%dT%H%M%S)-$$.json"
-        ina_atomic "$archive" "$(ina_b64 "$INA_JSON")" 600
-    fi
-    INA_JSON="$(jq '.settings={} | .files={} | .power=null | .gaming_active=true' <<< "$INA_JSON")"
-    ina_save
-    if [[ -n "$INA_POWER" ]]; then
-        original_power="$(powerprofilesctl get)"
-        INA_JSON="$(jq --arg o "$original_power" --arg a "$INA_POWER" '.power={original:$o,applied:$a}' <<< "$INA_JSON")"
-        ina_save
-    fi
-fi
-ina_setting org.cinnamon.desktop.notifications display-notifications false
-ina_setting org.cinnamon desktop-effects false
-ina_setting org.cinnamon desktop-effects-workspace false
-if "$INA_DRY"; then
-    printf '%s\n' 'Preview only. No command or power-profile change.'
-    ina_finish
-    exit 0
-fi
-[[ -z "$INA_POWER" ]] || powerprofilesctl set "$INA_POWER"
-child=''
+child='' started=false
 game_cleanup() {
     local status="$1" attempt
     trap - EXIT INT TERM HUP
@@ -54,6 +30,8 @@ game_cleanup() {
         kill -KILL -- "-$child" 2>/dev/null || true
         wait "$child" 2>/dev/null || true
     fi
+    # Before the new journal is started there is nothing to restore.
+    if ! "$started"; then ina_finish; exit "$status"; fi
     # Restoration errors preserve the active journal and print recovery.
     local restore_status
     set +e
@@ -70,10 +48,35 @@ game_cleanup() {
     ina_finish
     exit "$status"
 }
-trap 'game_cleanup "$?"' EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
-trap 'exit 129' HUP
+if ! "$INA_DRY"; then
+    jq -e '.gaming_active != true' <<< "$INA_JSON" >/dev/null || ina_error 'An interrupted gaming run requires restore before another run'
+    # Retain the prior run journal before starting a fresh snapshot.
+    if [[ -f "$INA_MANIFEST" ]]; then
+        archive="$INA_BACKUP/run-$(date -u +%Y%m%dT%H%M%S)-$$.json"
+        ina_atomic "$archive" "$(ina_b64 "$INA_JSON")" 600
+    fi
+    trap 'game_cleanup "$?"' EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+    trap 'exit 129' HUP
+    INA_JSON="$(jq '.settings={} | .files={} | .power=null | .gaming_active=true' <<< "$INA_JSON")"
+    started=true
+    ina_save
+    if [[ -n "$INA_POWER" ]]; then
+        original_power="$(powerprofilesctl get)"
+        INA_JSON="$(jq --arg o "$original_power" --arg a "$INA_POWER" '.power={original:$o,applied:$a}' <<< "$INA_JSON")"
+        ina_save
+    fi
+fi
+ina_setting org.cinnamon.desktop.notifications display-notifications false
+ina_setting org.cinnamon desktop-effects false
+ina_setting org.cinnamon desktop-effects-workspace false
+if "$INA_DRY"; then
+    printf '%s\n' 'Preview only. No command or power-profile change.'
+    ina_finish
+    exit 0
+fi
+[[ -z "$INA_POWER" ]] || powerprofilesctl set "$INA_POWER"
 # Job control stays disabled so setsid can use the child's PID as its session ID.
 set +m
 (
