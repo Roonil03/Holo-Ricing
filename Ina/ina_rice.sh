@@ -188,12 +188,13 @@ if [[ "${1:-}" == --internal-grub ]]; then
     boot_operation "$3" "${4:-}" "${5:-false}"
     exit 0
 fi
-apply=false dry=false approved=false install_boot=false restore_boot=false adopt_boot=false grub_only=false chrome=false skip_code=false skip_firefox=false
+apply=false dry=false approved=false install_boot=false restore_boot=false adopt_boot=false grub_only=false enable_lock=false chrome=false skip_code=false skip_firefox=false
 image='' grub_image='' settings='' profile=''; game=()
 while (($#)); do
     case "$1" in
         --apply) apply=true; shift ;; --dry-run) dry=true; shift ;; --approved) approved=true; shift ;;
         --install-grub) install_boot=true; shift ;; --grub-only) grub_only=true; shift ;; --adopt-existing-grub) adopt_boot=true; shift ;; --restore-grub) restore_boot=true; shift ;;
+        --enable-lock-rotation) enable_lock=true; shift ;;
         --user-chrome) chrome=true; shift ;; --skip-vscode) skip_code=true; shift ;; --skip-firefox) skip_firefox=true; shift ;;
         --desktop-image|--grub-image|--vscode-settings|--firefox-profile)
             (($# >= 2)) && [[ "$2" != --* && -n "$2" ]] || fail "Missing value for $1"
@@ -213,8 +214,8 @@ GRUB activation uses sudo only with --install-grub. Preparation runs otherwise.
 Sudo invocation: sudo --preserve-env=DISPLAY,XAUTHORITY,DBUS_SESSION_BUS_ADDRESS,XDG_RUNTIME_DIR,XDG_SESSION_TYPE,XDG_CURRENT_DESKTOP,XDG_CONFIG_HOME,XDG_DATA_HOME,XDG_STATE_HOME bash Ina/ina_rice.sh [options]
 Restore boot files: sudo bash Ina/ina_rice.sh --restore-grub --apply
 User backups: scripts/restore.sh --component NAME --apply
-Existing scripts are unchanged. Legacy scripts, missing cursor.sh, live lock
-rotation and unavailable media are excluded. No packages or restarts run.
+Use --enable-lock-rotation to lock active screensavers and rotate three images.
+Legacy installers and cursor-toggle.sh are excluded. No packages or restarts run.
 Gaming mode runs only a command explicitly supplied after -- and restores on exit.
 Runtime application, repeat runs, rollback and boot recovery are [unverified].
 HELP
@@ -248,6 +249,7 @@ if ((EUID == 0)); then
     arguments=()
     if "$apply"; then arguments+=(--apply); else arguments+=(--dry-run); fi
     "$approved" && arguments+=(--approved); "$install_boot" && arguments+=(--install-grub); "$adopt_boot" && arguments+=(--adopt-existing-grub); "$grub_only" && arguments+=(--grub-only)
+    "$enable_lock" && arguments+=(--enable-lock-rotation)
     "$chrome" && arguments+=(--user-chrome); "$skip_code" && arguments+=(--skip-vscode); "$skip_firefox" && arguments+=(--skip-firefox)
     [[ -z "$image" ]] || arguments+=(--desktop-image "$image")
     [[ -z "$grub_image" ]] || arguments+=(--grub-image "$grub_image")
@@ -269,15 +271,16 @@ if "$apply"; then
         "$skip_firefox" || [[ -n "$profile" && -d "$profile" ]] || fail 'Select --firefox-profile PATH or --skip-firefox'
     fi
 fi
-components=(icons window-controls widgets taskbar nemo animations wallpaper vscode firefox lockscreen grub)
+components=(icons cursor window-controls widgets taskbar nemo animations wallpaper vscode firefox lockscreen grub)
 "$grub_only" && components=(grub)
+if "$grub_only" && "$enable_lock"; then fail '--grub-only cannot enable lock rotation'; fi
 args_for() {
     args=()
     case "$1" in
-        icons|window-controls|widgets|taskbar|nemo|animations|wallpaper|gaming-mode) args+=(--apply-desktop) ;;
+        icons|cursor|window-controls|widgets|taskbar|nemo|animations|wallpaper|gaming-mode) args+=(--apply-desktop) ;;
     esac
     case "$1" in
-        widgets) args+=(--widgets clock calendar system) ;;
+        widgets) args+=(--widgets clock calendar system media) ;;
         wallpaper) [[ -z "$image" ]] || args+=(--image "$image"); args+=(--approved) ;;
         vscode) [[ -z "$settings" ]] || args+=(--settings "$settings") ;;
         firefox) [[ -z "$profile" ]] || args+=(--profile "$profile"); "$chrome" && args+=(--user-chrome) ;;
@@ -294,12 +297,13 @@ for component in "${components[@]}"; do
     selected+=("$component")
 done
 if "$install_boot" && "$apply"; then need sudo; fi
-printf '%s\n' 'Excluded: older scripts, missing cursor.sh, live lock rotation, Soundbox, and restore/install helper entry points.'
+printf '%s\n' 'Excluded: legacy installers, cursor-toggle.sh, Soundbox, and restore/install helper entry points. The original Ina media widget is selected.'
 for component in "${selected[@]}"; do
     args_for "$component"
     printf 'Previewing %s\n' "$component"
     bash "$SCRIPTS/$component.sh" "${args[@]}" --dry-run
 done
+if "$enable_lock"; then printf '%s\n' 'Live lock rotation selected: active screensavers will be explicitly locked. Three images rotate every 300 seconds.'; fi
 if "$apply"; then
     for component in "${selected[@]}"; do
         args_for "$component"
@@ -307,6 +311,11 @@ if "$apply"; then
         [[ "$component" != lockscreen ]] || printf 'Download recovery: bash %q --component lockscreen-images --apply\n' "$SCRIPTS/restore.sh"
         bash "$SCRIPTS/$component.sh" "${args[@]}" --apply
     done
+    if "$enable_lock" && ! "$grub_only"; then
+        lock_config="${XDG_DATA_HOME:-$HOME/.local/share}/ina/lockscreen/assets.json"
+        bash "$SCRIPTS/lockscreen.sh" --asset-config "$lock_config" --approved --force-lock-on-activation --apply-desktop --dry-run
+        bash "$SCRIPTS/lockscreen.sh" --asset-config "$lock_config" --approved --force-lock-on-activation --apply-desktop --apply
+    fi
     if "$install_boot"; then
         prepared="${XDG_DATA_HOME:-$HOME/.local/share}/ina/grub"
         sudo bash "$SELF" --internal-grub --apply install "$prepared" "$adopt_boot"

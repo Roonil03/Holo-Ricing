@@ -47,7 +47,7 @@ ina_text "$prepared/assets.json" "$configuration"$'\n' 600
 printf 'Image configuration: %s\n' "$prepared/assets.json"
 if "$INA_DRY"; then printf '%s\n' 'Preview only. Three images would be prepared in the selected order.'
 else printf '%s\n' 'Three images prepared in the selected order.'; fi
-printf '%s\n' 'Interval for the test-only model: 300 seconds.' \
+printf '%s\n' 'Rotation interval: 300 seconds while locked.' \
     'Select an independent static desktop image in assets.json before enabling rotation.' \
     'Live setup requires --force-lock-on-activation and explicitly locks each active screensaver.' \
     'No wallpaper, login-screen setting, service, or boot file was changed.'
