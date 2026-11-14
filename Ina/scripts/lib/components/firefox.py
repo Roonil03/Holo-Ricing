@@ -2,7 +2,43 @@
 from pathlib import Path
 import re
 import json
+import errno
+import fcntl
+import os
+import stat
 from engine import Error, reject_links
+
+
+def require_unlocked(ctx, profile):
+    # Legacy lock symlinks can encode a live host and PID; treat them conservatively.
+    for name in ('lock', 'parent.lock'):
+        marker = profile / name
+        if marker.exists() or marker.is_symlink():
+            raise Error('Firefox profile has a lock marker. Close Firefox and inspect it before retrying.')
+    marker = profile / '.parentlock'
+    if marker.is_symlink():
+        raise Error('Firefox profile has a lock symlink. Close Firefox and inspect it before retrying.')
+    try:
+        fd = os.open(marker, os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        raise Error(f'Cannot inspect Firefox profile lock: {exc}') from exc
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise Error('Firefox profile lock is not a regular file.')
+        try:
+            fcntl.lockf(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as exc:
+            if exc.errno in (errno.EACCES, errno.EAGAIN):
+                raise Error('Firefox profile is locked. Close Firefox before retrying.') from exc
+            raise Error(f'Cannot inspect Firefox profile lock: {exc}') from exc
+        # Retain the advisory lock until the engine process exits.
+        ctx.firefox_lock_fd = fd
+        fd = None
+    finally:
+        if fd is not None:
+            os.close(fd)
 
 
 def preference_lines(text, keys):
@@ -21,8 +57,7 @@ def prepare_restore(ctx, manifest):
     profile = reject_links(details['profile'])
     if not profile.is_relative_to(ctx.home):
         raise Error('Firefox backup profile is outside the user directory.')
-    if any((profile / name).exists() or (profile / name).is_symlink() for name in ('lock', '.parentlock', 'parent.lock')):
-        raise Error('Close the selected Firefox profile before restoring.')
+    require_unlocked(ctx, profile)
     prefs = reject_links(profile / 'prefs.js')
     text = prefs.read_text() if prefs.exists() else ''
     current = preference_lines(text, details['applied'])
@@ -51,14 +86,15 @@ def run(ctx):
     profile = reject_links(Path(ctx.args.profile).expanduser())
     if not profile.is_dir() or not profile.is_relative_to(ctx.home):
         raise Error('Select an existing profile directory beneath your home directory.')
-    if any((profile / name).exists() or (profile / name).is_symlink() for name in ('lock', '.parentlock', 'parent.lock')):
-        raise Error('Firefox profile has a lock file. Close Firefox and check its processes before retrying.')
+    require_unlocked(ctx, profile)
     p = ctx.palette
     preferences = {'browser.display.background_color': p['ABYSS'], 'browser.display.foreground_color': p['ANCIENT_PARCHMENT'], 'browser.display.use_system_colors': False, 'browser.display.document_color_use': 0}
     if ctx.args.user_chrome:
         preferences['toolkit.legacyUserProfileCustomizations.stylesheets'] = True
     prefs = reject_links(profile / 'prefs.js')
     prefs_text = prefs.read_text() if prefs.exists() else ''
+    user = reject_links(profile / 'user.js')
+    chrome = reject_links(profile / 'chrome/userChrome.css') if ctx.args.user_chrome else None
     if not ctx.dry:
         details = ctx.manifest.setdefault('firefox', {'profile': str(profile), 'original': {}, 'applied': {}})
         if details['profile'] != str(profile):
@@ -69,14 +105,12 @@ def run(ctx):
                 details['original'][key] = item
         details['applied'].update(preferences)
         ctx.save()
-    user = profile / 'user.js'
     original = user.read_text() if user.exists() else ''
     original = re.sub(r'// Ina preferences begin\n.*?// Ina preferences end\n?', '', original, flags=re.DOTALL)
     # Preserve previous declarations. Our final block overrides only these keys.
     added = '// Ina preferences begin\n' + ''.join(f'user_pref({json.dumps(k)}, {json.dumps(v)});\n' for k, v in preferences.items()) + '// Ina preferences end\n'
     ctx.file(user, original.rstrip('\n') + '\n' + added)
     if ctx.args.user_chrome:
-        chrome = profile / 'chrome/userChrome.css'
         original_css = chrome.read_text() if chrome.exists() else ''
         original_css = re.sub(r'/\* Ina chrome begin \*/.*?/\* Ina chrome end \*/\n?', '', original_css, flags=re.DOTALL)
         added_css = f'''/* Ina chrome begin */
