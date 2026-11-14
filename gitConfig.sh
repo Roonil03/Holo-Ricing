@@ -76,7 +76,7 @@ path_check() {
     done
 }
 [[ "$repo" == /* ]] || repo="$SCRIPT_DIR/$repo"
-repo="$(realpath -m -- "$repo")"; path_check "$repo"
+path_check "$repo"; repo="$(realpath -m -- "$repo")"; path_check "$repo"
 common="$(git -C "$repo" rev-parse --path-format=absolute --git-common-dir)" || fail 'Select an existing Git repository'
 path_check "$common"
 config="$common/config"; backup="$common/holoricing-config-backup"
