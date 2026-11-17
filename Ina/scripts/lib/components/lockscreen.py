@@ -6,6 +6,7 @@ import secrets
 import stat
 import sys
 import subprocess
+import tempfile
 from pathlib import Path
 from engine import Error, atomic, reject_links
 
@@ -78,8 +79,35 @@ def unit_arg(value):
     return '"' + value + '"'
 
 
+def native_binary(ctx):
+    """Build before touching the running service; preview never invokes cc."""
+    source = Path(__file__).resolve().parents[3] / 'src/lockscreen-native.c'
+    if ctx.dry:
+        print(f'Would compile native Cinnamon wallpaper helper: {source}')
+        return b''
+    with tempfile.TemporaryDirectory(prefix='ina-lock-native-') as directory:
+        target = Path(directory) / 'lockscreen-native'
+        process = subprocess.Popen(['cc', '-std=c11', '-O2', '-Wall', '-Wextra', '-Werror',
+                                    '-Wl,-z,relro,-z,now', str(source), '-o', str(target), '-ldl'],
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            _, errors = process.communicate()
+        except BaseException:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+            raise
+        if process.returncode:
+            raise Error('Could not build native wallpaper helper: ' + errors.decode(errors='replace').strip())
+        return target.read_bytes()
+
+
 def install_service(ctx, images, desktop):
     worker = ctx.data / 'ina/lockscreen/lockscreen-worker.py'
+    native = ctx.data / 'ina/lockscreen/lockscreen-native'
     config = ctx.config / 'ina/lockscreen-service.json'
     unit = ctx.config / 'systemd/user/ina-lockscreen.service'
     state = reject_links(ctx.state / 'lock-rotation-live.json')
@@ -105,7 +133,7 @@ def install_service(ctx, images, desktop):
             data = json.loads(current)
             if set(data) != {'token', 'next_index'} or data['token'] != token or type(data['next_index']) is not int or not 0 <= data['next_index'] < 3:
                 raise Error('Rotation state changed externally.')
-    text = json.dumps({'desktop_image': str(desktop), 'lock_images': [str(p) for p in images],
+    text = json.dumps({'native_helper': str(native), 'desktop_image': str(desktop), 'lock_images': [str(p) for p in images],
                        'state': str(state), 'token': token, 'lock_path': str(lock_path)}, indent=2) + '\n'
     command = ' '.join(unit_arg(p) for p in ('/usr/bin/python3', worker, config))
     unit_text = ('[Unit]\nDescription=Ina lockscreen wallpaper rotation\n'
@@ -114,7 +142,7 @@ def install_service(ctx, images, desktop):
                  'KillMode=process\nRestart=on-failure\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n')
     managed = bool(ctx.manifest.get('service_managed'))
     # Never execute an externally edited unit or its ExecStopPost helper.
-    for path in (lock_path, worker, config, unit):
+    for path in (lock_path, worker, native, config, unit):
         path = reject_links(path)
         entry = ctx.manifest['files'].get(str(path))
         if entry:
@@ -125,6 +153,7 @@ def install_service(ctx, images, desktop):
         for command_name in ('is-active', 'is-enabled'):
             if subprocess.run(['systemctl', '--user', command_name, '--quiet', 'ina-lockscreen.service']).returncode == 0:
                 raise Error('Refusing to take over an existing lockscreen service.')
+    binary = native_binary(ctx)
     previous_active = False
     if not ctx.dry and managed:
         previous_active = subprocess.run(['systemctl', '--user', 'is-active', '--quiet', 'ina-lockscreen.service']).returncode == 0
@@ -154,6 +183,7 @@ def install_service(ctx, images, desktop):
             atomic(state, initial, 0o600)
         ctx.file(lock_path, b'', 0o600)
         ctx.file(worker, source.read_bytes(), 0o700)
+        ctx.file(native, binary, 0o700)
         ctx.file(config, text, 0o600)
         ctx.file(unit, unit_text, 0o600)
         ctx.setting('org.cinnamon.desktop.screensaver', 'lock-enabled', True)
@@ -179,7 +209,7 @@ def install_service(ctx, images, desktop):
                     original, _, mode = ctx.run_files[state]
                     ctx.run_files[state] = (original, current, mode)
         raise
-    print('Enabled ina-lockscreen.service. Active screensavers will be locked immediately.')
+    print('Enabled ina-lockscreen.service with native wallpaper helper. Active screensavers will be locked immediately.')
 
 
 def run(ctx):
@@ -191,7 +221,8 @@ def run(ctx):
     for item in lock_sources:
         print(f"Selected {item['role']}: {item['url']}")
         print(f"Local download name: {item['filename']}")
-    print('Live mode explicitly locks every active screensaver before rotation.')
+    print('Live mode explicitly locks each supervised Cinnamon screensaver before rotation.')
+    print('Native helper rotates three static images; Cinnamon supplies crossfades. Video and continuous motion are unsupported.')
     if not ctx.args.images or not ctx.args.image:
         print('Required paths: exactly three approved lock images and one approved static desktop image.')
         if not ctx.dry:

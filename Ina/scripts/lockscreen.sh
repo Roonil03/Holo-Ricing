@@ -11,7 +11,9 @@ for argument in "$@"; do
                 'Optional: --asset-config PATH or --image PATH for the independent desktop image.' \
                 'Preparation downloads only user-local files. It does not enable live rotation.' \
                 'Live setup: --asset-config PATH --approved --force-lock-on-activation --apply --apply-desktop.' \
-                'This locks the screensaver immediately whenever it becomes active.' \
+                'This locks the supervised Cinnamon screensaver immediately whenever it becomes active.' \
+                'The native helper rotates static images every 300 seconds; Cinnamon supplies crossfades.' \
+                'Requires Cinnamon on X11; continuous motion/video is unsupported.' \
                 'Use --test-root PATH for isolated simulation.' \
                 'Restore prepared images: restore.sh --component lockscreen-images --apply'
             exit 0 ;;
@@ -49,6 +51,6 @@ if "$INA_DRY"; then printf '%s\n' 'Preview only. Three images would be prepared 
 else printf '%s\n' 'Three images prepared in the selected order.'; fi
 printf '%s\n' 'Rotation interval: 300 seconds while locked.' \
     'Select an independent static desktop image in assets.json before enabling rotation.' \
-    'Live setup requires --force-lock-on-activation and explicitly locks each active screensaver.' \
+    'Live setup requires --force-lock-on-activation and locks each supervised Cinnamon screensaver.' \
     'No wallpaper, login-screen setting, service, or boot file was changed.'
 ina_finish

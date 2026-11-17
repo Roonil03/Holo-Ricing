@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import pwd
 import signal
+import select
 import stat
 import subprocess
 import sys
@@ -69,6 +70,48 @@ def owner_is_lock_capable(bus, owner, child):
         pass
     pid = call(bus, BUS, BUS_PATH, BUS, 'GetConnectionUnixProcessID', GLib.Variant('(s)', (owner,)))[0]
     return pid == child.pid and child.poll() is None
+
+
+class NativeWallpaper:
+    """C owns wallpaper writes and restores on supervisor death (pipe EOF)."""
+    def __init__(self, config, lock_fd):
+        self.uris = [Path(p).as_uri() for p in [config['desktop_image'], *config['lock_images']]]
+        self.command = [config['native_helper'], '--serve', str(lock_fd),
+                        config['desktop_image'], *config['lock_images']]
+        self.process = subprocess.Popen(self.command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                        pass_fds=(lock_fd,), close_fds=True)
+
+    def set_string(self, key, value):
+        if key != 'picture-uri' or value not in self.uris:
+            raise ValueError('Unapproved wallpaper command')
+        index = self.uris.index(value)
+        command = b'R' if index == 0 else str(index - 1).encode('ascii')
+        if self.process.poll() is not None:
+            raise RuntimeError('Native wallpaper helper exited')
+        self.process.stdin.write(command)
+        self.process.stdin.flush()
+        if not select.select([self.process.stdout], [], [], 5)[0]:
+            raise RuntimeError('Native wallpaper helper did not acknowledge update')
+        if self.process.stdout.readline() != b'OK\n':
+            raise RuntimeError('Native wallpaper update failed; inspect service journal')
+        return True
+
+    def close(self):
+        # EOF triggers restoration even if Python terminated before sending R.
+        try:
+            self.process.stdin.close()
+        except BrokenPipeError:
+            pass
+        try:
+            result = self.process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            self.process.kill()
+            self.process.wait()
+            raise RuntimeError('Native wallpaper helper could not shut down')
+        finally:
+            self.process.stdout.close()
+        if result:
+            raise RuntimeError('Native wallpaper helper failed; external wallpaper edits were preserved')
 
 
 class Worker:
@@ -193,18 +236,21 @@ def main():
         return
     fd = acquire_lock(config['lock_path'], take=action != '--check')
     try:
-        run(config, action)
+        run(config, action, fd)
     finally:
         os.close(fd)
 
 
-def run(config, action):
+def run(config, action, lock_fd):
+    if action not in ('--check', '--restore') and os.environ.get('XDG_SESSION_TYPE') == 'wayland':
+        raise ValueError('This Cinnamon screensaver integration requires an X11 session')
     desktop = image_uri(config['desktop_image'])
-    settings = Gio.Settings.new('org.cinnamon.desktop.background')
+    helper = Path(config['native_helper'])
+    if not helper.is_absolute() or any(p.is_symlink() for p in (helper, *helper.parents)):
+        raise ValueError('Native helper path must be absolute and without symbolic links')
     if action == '--restore':
-        if not settings.set_string('picture-uri', desktop):
-            raise RuntimeError('Could not restore desktop wallpaper')
-        Gio.Settings.sync()
+        subprocess.run([str(helper), '--restore', str(lock_fd), config['desktop_image'], *config['lock_images']],
+                       pass_fds=(lock_fd,), check=True)
         return
     images = config['lock_images']
     if not isinstance(images, list) or len(images) != 3:
@@ -215,27 +261,30 @@ def run(config, action):
         raise ValueError('Images must be distinct')
     for p in images:
         image_uri(p)
-    worker = Worker(None, settings, desktop, images, Path(config['state']), config['token'])
+    worker = Worker(None, None, desktop, images, Path(config['state']), config['token'])
     if action == '--check':
+        subprocess.run([str(helper), '--check', config['desktop_image'], *images], check=True)
         return
-    worker.bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
-    def active_changed(_connection, _sender, _path, _interface, _signal, parameters):
-        if not parameters.unpack()[0] and worker.locked:
-            worker.restore()
-
-    def owner_changed(_connection, _sender, _path, _interface, _signal, parameters):
-        _name, previous, current = parameters.unpack()
-        if worker.locked and previous == worker.owner and current != previous:
-            worker.restore()
-
-    bus = worker.bus
-    bus.signal_subscribe(NAME, INTERFACE, 'ActiveChanged', PATH, None,
-                         Gio.DBusSignalFlags.NONE, active_changed)
-    bus.signal_subscribe(BUS, BUS, 'NameOwnerChanged', BUS_PATH, NAME,
-                         Gio.DBusSignalFlags.NONE, owner_changed)
-    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
-    signal.signal(signal.SIGINT, lambda *_: sys.exit(0))
+    settings = NativeWallpaper(config, lock_fd)
+    worker.settings = settings
     try:
+        worker.bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+        def active_changed(_connection, _sender, _path, _interface, _signal, parameters):
+            if not parameters.unpack()[0] and worker.locked:
+                worker.restore()
+
+        def owner_changed(_connection, _sender, _path, _interface, _signal, parameters):
+            _name, previous, current = parameters.unpack()
+            if worker.locked and previous == worker.owner and current != previous:
+                worker.restore()
+
+        bus = worker.bus
+        bus.signal_subscribe(NAME, INTERFACE, 'ActiveChanged', PATH, None,
+                             Gio.DBusSignalFlags.NONE, active_changed)
+        bus.signal_subscribe(BUS, BUS, 'NameOwnerChanged', BUS_PATH, NAME,
+                             Gio.DBusSignalFlags.NONE, owner_changed)
+        signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+        signal.signal(signal.SIGINT, lambda *_: sys.exit(0))
         worker.restore()
         context = GLib.MainContext.default()
         next_check = 0
@@ -248,7 +297,10 @@ def run(config, action):
                 next_check = now + 1
             time.sleep(0.1)
     finally:
-        worker.restore()
+        try:
+            worker.restore()
+        finally:
+            settings.close()
 
 
 if __name__ == '__main__':
