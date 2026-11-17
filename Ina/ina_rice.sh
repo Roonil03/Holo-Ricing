@@ -196,28 +196,34 @@ if [[ "${1:-}" == --internal-grub ]]; then
     exit 0
 fi
 apply=false dry=false approved=false install_boot=false restore_boot=false adopt_boot=false grub_only=false enable_lock=false chrome=false skip_code=false skip_firefox=false
-image='' grub_image='' settings='' profile=''; game=()
+image='' grub_image='' settings='' profile='' asset_config=''; game=()
 while (($#)); do
     case "$1" in
         --apply) apply=true; shift ;; --dry-run) dry=true; shift ;; --approved) approved=true; shift ;;
         --install-grub) install_boot=true; shift ;; --grub-only) grub_only=true; shift ;; --adopt-existing-grub) adopt_boot=true; shift ;; --restore-grub) restore_boot=true; shift ;;
         --enable-lock-rotation) enable_lock=true; shift ;;
         --user-chrome) chrome=true; shift ;; --skip-vscode) skip_code=true; shift ;; --skip-firefox) skip_firefox=true; shift ;;
-        --desktop-image|--grub-image|--vscode-settings|--firefox-profile)
+        --desktop-image|--grub-image|--vscode-settings|--firefox-profile|--asset-config)
             (($# >= 2)) && [[ "$2" != --* && -n "$2" ]] || fail "Missing value for $1"
-            case "$1" in --desktop-image) image="$2" ;; --grub-image) grub_image="$2" ;; --vscode-settings) settings="$2" ;; --firefox-profile) profile="$2" ;; esac
+            case "$1" in --desktop-image) image="$2" ;; --grub-image) grub_image="$2" ;; --vscode-settings) settings="$2" ;; --firefox-profile) profile="$2" ;; --asset-config) asset_config="$2" ;; esac
             shift 2 ;;
         --) shift; game=("$@"); break ;;
         --help)
             cat <<'HELP'
-Preview: bash Ina/ina_rice.sh --dry-run [path choices]
+Preview: bash Ina/ina.sh --dry-run [path choices]
+Apply selected configuration: sudo bash Ina/ina.sh [path choices]
+Missing or ambiguous image/application selections stop before desktop writes.
 Apply all supported components: bash Ina/ina_rice.sh --apply --approved \
   --desktop-image PATH --vscode-settings PATH --firefox-profile PATH
 Use --skip-vscode or --skip-firefox to explicitly omit an application.
+Existing Ina assets/backup selections, Code settings and configured Firefox defaults
+are reused when unambiguous. --asset-config PATH selects an existing image config.
 Relative input paths resolve from this file, not the current directory.
 Optional: --user-chrome, --install-grub, --adopt-existing-grub, or -- GAME ARGUMENTS.
+Existing live lock rotation is retained; new activation requires --enable-lock-rotation.
 For boot only: --grub-only --install-grub [--grub-image PATH] --approved --apply
-GRUB activation uses sudo only with --install-grub. Preparation runs otherwise.
+GRUB preparation requires --grub-image, a configured grub_image, or --install-grub.
+Only --install-grub activates GRUB using the privileged helper.
 Sudo invocation: sudo --preserve-env=DISPLAY,XAUTHORITY,DBUS_SESSION_BUS_ADDRESS,XDG_RUNTIME_DIR,XDG_SESSION_TYPE,XDG_CURRENT_DESKTOP,XDG_CONFIG_HOME,XDG_DATA_HOME,XDG_STATE_HOME bash Ina/ina_rice.sh [options]
 Restore boot files: sudo bash Ina/ina_rice.sh --restore-grub --apply
 User backups: scripts/restore.sh --component NAME --apply
@@ -244,10 +250,60 @@ if ((EUID == 0)); then
     target="${SUDO_USER:-}"
     [[ -n "$target" && "$target" != root ]] || fail 'Run through sudo from your Cinnamon account, or run without sudo'
     need sudo getent env
-    entry="$(getent passwd "$target")"; IFS=: read -r _ _ uid _ _ target_home _ <<< "$entry"
+    entry="$(getent passwd "$target")" || fail 'Cannot resolve the sudo caller'
+    IFS=: read -r account _ uid gid _ target_home _ <<< "$entry"
+    [[ "$account" == "$target" && "$uid" =~ ^[0-9]+$ && "$uid" != 0 && "${SUDO_UID:-}" == "$uid" && "${SUDO_GID:-}" == "$gid" ]] || fail 'Sudo caller identity does not match the account database'
+    plain_path "$target_home"
+    [[ -d "$target_home" ]] || fail 'Sudo caller home is missing'
+    # Plain sudo commonly removes session variables. Recover only the supported
+    # desktop variables from an actual Cinnamon process belonging to this UID.
+    if "$apply" && ! "$grub_only" && [[ "${XDG_SESSION_TYPE:-}" != x11 || "${XDG_CURRENT_DESKTOP:-}" != *Cinnamon* || -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]]; then
+        need python3
+        session_output="$(python3 - "$uid" <<'PYSESSION'
+import os
+from pathlib import Path
+import sys
+uid = int(sys.argv[1])
+keys = ('DISPLAY', 'XAUTHORITY', 'DBUS_SESSION_BUS_ADDRESS', 'XDG_RUNTIME_DIR',
+        'XDG_SESSION_TYPE', 'XDG_CURRENT_DESKTOP', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME')
+sessions = set()
+for process in Path('/proc').iterdir():
+    if not process.name.isdigit():
+        continue
+    try:
+        if process.stat().st_uid != uid or (process / 'comm').read_text().strip() != 'cinnamon':
+            continue
+        values = dict(item.split(b'=', 1) for item in (process / 'environ').read_bytes().split(b'\0') if b'=' in item)
+        selected = tuple(values.get(key.encode(), b'').decode() for key in keys)
+        if selected[4] == 'x11' and 'Cinnamon' in selected[5] and selected[2]:
+            if any('\n' in value or '\r' in value for value in selected):
+                raise ValueError('Multiline desktop environment refused')
+            sessions.add(selected)
+    except (OSError, UnicodeError):
+        continue
+if len(sessions) != 1:
+    sys.exit('Cannot identify one Cinnamon X11 session; preserve its environment as shown by --help')
+for value in sessions.pop():
+    print(value)
+PYSESSION
+)" || fail 'No unambiguous desktop session; no component was run'
+        mapfile -t session_values <<< "$session_output"
+        session_keys=(DISPLAY XAUTHORITY DBUS_SESSION_BUS_ADDRESS XDG_RUNTIME_DIR XDG_SESSION_TYPE XDG_CURRENT_DESKTOP XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME)
+        for index in "${!session_keys[@]}"; do
+            key="${session_keys[$index]}"
+            [[ -z "${session_values[$index]:-}" ]] || printf -v "$key" '%s' "${session_values[$index]}"
+        done
+    fi
     environment=("HOME=$target_home" "USER=$target" "LOGNAME=$target")
-    for key in DISPLAY XAUTHORITY DBUS_SESSION_BUS_ADDRESS XDG_RUNTIME_DIR XDG_SESSION_TYPE XDG_CURRENT_DESKTOP XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME; do
+    for key in DISPLAY XAUTHORITY DBUS_SESSION_BUS_ADDRESS XDG_RUNTIME_DIR XDG_SESSION_TYPE XDG_CURRENT_DESKTOP; do
         [[ -z "${!key:-}" ]] || environment+=("$key=${!key}")
+    done
+    for key in XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME; do
+        if [[ -n "${!key:-}" ]]; then
+            plain_path "${!key}"
+            [[ "${!key}" == "$target_home/"* ]] || fail "$key must be beneath the sudo caller's home"
+            environment+=("$key=${!key}")
+        fi
     done
     if "$apply" && ! "$grub_only"; then
         [[ "${XDG_SESSION_TYPE:-}" == x11 && "${XDG_CURRENT_DESKTOP:-}" == *Cinnamon* && -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]] || fail 'Preserve the Cinnamon environment using the sudo command shown by --help'
@@ -262,7 +318,16 @@ if ((EUID == 0)); then
     [[ -z "$grub_image" ]] || arguments+=(--grub-image "$grub_image")
     [[ -z "$settings" ]] || arguments+=(--vscode-settings "$settings")
     [[ -z "$profile" ]] || arguments+=(--firefox-profile "$profile")
+    [[ -z "$asset_config" ]] || arguments+=(--asset-config "$asset_config")
     ((${#game[@]} == 0)) || arguments+=(-- "${game[@]}")
+    # A preview must not start a privileged helper or run desktop components as root.
+    if ! "$apply"; then
+        printf 'Dry-run: desktop components would run as %s (uid %s), HOME=%s.\n' "$target" "$uid" "$target_home"
+        printf 'Run this preview from that desktop account: bash %q' "$SELF"
+        printf ' %q' "${arguments[@]}"; printf '\n'
+        printf '%s\n' 'No sudo command, component, boot helper, or game was executed.'
+        exit 0
+    fi
     exec sudo -u "$target" -- env "${environment[@]}" bash "$SELF" "${arguments[@]}"
 fi
 resolve() { local path="$1"; [[ "$path" == /* ]] || path="$SELF_DIR/$path"; plain_path "$path"; realpath -m -- "$path"; }
@@ -270,15 +335,137 @@ resolve() { local path="$1"; [[ "$path" == /* ]] || path="$SELF_DIR/$path"; plai
 [[ -z "$grub_image" ]] || grub_image="$(resolve "$grub_image")"
 [[ -z "$settings" ]] || settings="$(resolve "$settings")"
 [[ -z "$profile" ]] || profile="$(resolve "$profile")"
+[[ -z "$asset_config" ]] || asset_config="$(resolve "$asset_config")"
+# Reuse only recorded choices or unambiguous application configuration. This
+# resolver reads existing files; it never creates a profile or chooses a random one.
+need python3
+approved_explicit="$approved"
+selection_output="$(PYTHONDONTWRITEBYTECODE=1 python3 - "$asset_config" "$settings" "$profile" "$skip_code" "$skip_firefox" "$grub_only" <<'PYSELECT'
+import configparser
+import json
+import os
+from pathlib import Path
+import sys
+
+home = Path.home()
+config = Path(os.environ.get('XDG_CONFIG_HOME', home / '.config'))
+data = Path(os.environ.get('XDG_DATA_HOME', home / '.local/share'))
+state = Path(os.environ.get('XDG_STATE_HOME', home / '.local/state')) / 'ina'
+
+def read(path):
+    path = Path(path)
+    for part in (path, *path.parents):
+        if part.is_symlink():
+            raise ValueError(f'Symbolic link refused: {part}')
+    if not path.exists():
+        return {}
+    result = json.loads(path.read_text())
+    if not isinstance(result, dict):
+        raise ValueError(f'Expected an object: {path}')
+    return result
+
+def text(value):
+    if not isinstance(value, str) or any(c in value for c in ('\n', '\r', '\0')):
+        raise ValueError('Configured selections must be single-line strings')
+    return value
+
+try:
+    explicit, selected_code, selected_profile, skip_code, skip_firefox, grub_only = sys.argv[1:]
+    desktop = grub_only != 'true'
+    need_code = desktop and skip_code != 'true' and not selected_code
+    need_profile = desktop and skip_firefox != 'true' and not selected_profile
+    choices = [Path(explicit)] if explicit else [config / 'ina/assets.json', data / 'ina/lockscreen/assets.json']
+    found = [path for path in choices if path.is_file()]
+    if explicit and not found:
+        raise ValueError(f'Asset configuration missing: {explicit}')
+    if len(found) > 1:
+        raise ValueError('Multiple Ina image configurations; choose --asset-config PATH')
+    assets = read(found[0]) if found else {}
+    lockscreen = read(state / 'backups/lockscreen/manifest.json') if desktop else {}
+    code = text(assets.get('vscode_settings', '')) if need_code else ''
+    if need_code and not code:
+        vscode = read(state / 'backups/vscode/manifest.json')
+        candidates = list(vscode.get('files', {}))
+        if not candidates:
+            candidates = [str(path) for path in (
+                config / 'Code/User/settings.json', config / 'Code - OSS/User/settings.json',
+                config / 'VSCodium/User/settings.json',
+                home / '.var/app/com.visualstudio.code/config/Code/User/settings.json'
+            ) if path.is_file()]
+        if len(candidates) == 1:
+            code = text(candidates[0])
+    profile = text(assets.get('firefox_profile', '')) if need_profile else ''
+    if need_profile and not profile:
+        firefox = read(state / 'backups/firefox/manifest.json')
+        profile = text(firefox.get('firefox', {}).get('profile', ''))
+    if need_profile and not profile:
+        defaults = set()
+        roots = [home / '.mozilla/firefox', home / '.var/app/org.mozilla.firefox/.mozilla/firefox',
+                 home / 'snap/firefox/common/.mozilla/firefox']
+        for root in roots:
+            for filename in ('installs.ini', 'profiles.ini'):
+                ini = root / filename
+                if not ini.is_file():
+                    continue
+                for part in (ini, *ini.parents):
+                    if part.is_symlink():
+                        raise ValueError(f'Symbolic link refused: {part}')
+                parser = configparser.ConfigParser(interpolation=None)
+                parser.read(ini)
+                for section in parser.values():
+                    path = ''
+                    if 'Default' in section and section['Default'] not in ('0', '1'):
+                        path = section['Default']
+                    elif section.get('Default') == '1' and section.get('Path'):
+                        path = section['Path']
+                    if path:
+                        target = Path(path)
+                        defaults.add(str(target if target.is_absolute() else root / target))
+        if len(defaults) == 1:
+            profile = text(defaults.pop())
+    values = [str(found[0]) if found else '', text(assets.get('desktop_image', '')),
+              text(assets.get('grub_image', '')), code, profile,
+              'true' if assets.get('approved') is True else 'false',
+              'true' if assets.get('force_lock_on_activation') is True or lockscreen.get('service_managed') is True else 'false',
+              'true' if isinstance(assets.get('lock_images'), list) and len(assets['lock_images']) == 3 and all(isinstance(p, str) and p for p in assets['lock_images']) else 'false']
+    for value in values:
+        print(value)
+except (OSError, ValueError, KeyError, TypeError, configparser.Error) as exc:
+    print(f'Error resolving existing Ina selections: {exc}', file=sys.stderr)
+    sys.exit(1)
+PYSELECT
+)" || fail 'Existing selections could not be read; no component was run'
+mapfile -t selections <<< "$selection_output"
+asset_config="${selections[0]}"
+[[ -n "$image" || -z "${selections[1]}" ]] || image="$(resolve "${selections[1]}")"
+[[ -n "$grub_image" || -z "${selections[2]}" ]] || grub_image="$(resolve "${selections[2]}")"
+[[ -n "$settings" || -z "${selections[3]}" ]] || settings="$(resolve "${selections[3]}")"
+[[ -n "$profile" || -z "${selections[4]}" ]] || profile="$(resolve "${selections[4]}")"
+if "${selections[5]}" && ! "$approved"; then
+    # A recorded approval applies only to the images in that configuration.
+    configured_desktop='' configured_grub=''
+    [[ -z "${selections[1]}" ]] || configured_desktop="$(resolve "${selections[1]}")"
+    [[ -z "${selections[2]}" ]] || configured_grub="$(resolve "${selections[2]}")"
+    if [[ "$image" == "$configured_desktop" && "$grub_image" == "$configured_grub" ]]; then approved=true; fi
+fi
+if ! "$grub_only" && "${selections[6]}"; then enable_lock=true; fi
+local_lock_images="${selections[7]}"
 if "$apply"; then
-    "$approved" || fail 'Applying images requires --approved'
+    "$approved" || fail 'Applying images requires --approved or approved:true in the selected asset configuration'
+    if "$install_boot" && [[ -z "$grub_image" ]] && ! "$approved_explicit"; then
+        fail 'Downloading the configured GRUB source requires explicit --approved, or select an approved grub_image in the asset configuration'
+    fi
+    if ! "$grub_only" && ! "$local_lock_images" && ! "$approved_explicit"; then
+        fail 'Preparing missing lock images requires explicit --approved, or select three previously approved lock_images'
+    fi
     if ! "$grub_only"; then
         [[ -n "$image" && -f "$image" ]] || fail 'Select an existing independent --desktop-image PATH'
         "$skip_code" || [[ -n "$settings" ]] || fail 'Select --vscode-settings PATH or --skip-vscode'
         "$skip_firefox" || [[ -n "$profile" && -d "$profile" ]] || fail 'Select --firefox-profile PATH or --skip-firefox'
     fi
 fi
-components=(icons cursor window-controls widgets taskbar nemo animations wallpaper vscode firefox lockscreen grub)
+components=(icons cursor window-controls widgets taskbar nemo animations wallpaper vscode firefox lockscreen)
+if "$install_boot" || [[ -n "$grub_image" ]]; then components+=(grub); fi
 "$grub_only" && components=(grub)
 if "$grub_only" && "$enable_lock"; then fail '--grub-only cannot enable lock rotation'; fi
 args_for() {
@@ -287,11 +474,18 @@ args_for() {
         icons|cursor|window-controls|widgets|taskbar|nemo|animations|wallpaper|gaming-mode) args+=(--apply-desktop) ;;
     esac
     case "$1" in
-        widgets) args+=(--widgets clock calendar system media) ;;
+        widgets) args+=(--widgets clock calendar system) ;;
         wallpaper) [[ -z "$image" ]] || args+=(--image "$image"); args+=(--approved) ;;
         vscode) [[ -z "$settings" ]] || args+=(--settings "$settings") ;;
         firefox) [[ -z "$profile" ]] || args+=(--profile "$profile"); "$chrome" && args+=(--user-chrome) ;;
-        lockscreen) args+=(--download-images --approved); [[ -z "$image" ]] || args+=(--image "$image") ;;
+        lockscreen)
+            if "$local_lock_images"; then
+                args+=(--asset-config "$asset_config" --approved)
+                if "$enable_lock"; then args+=(--force-lock-on-activation --apply-desktop); fi
+            else
+                args+=(--download-images --approved)
+            fi
+            [[ -z "$image" ]] || args+=(--image "$image") ;;
         grub) args+=(--allow-boot-change --approved); if [[ -n "$grub_image" ]]; then args+=(--image "$grub_image"); else args+=(--download-images); fi ;;
     esac
     return 0
@@ -304,9 +498,21 @@ for component in "${components[@]}"; do
     selected+=("$component")
 done
 if "$install_boot" && "$apply"; then need sudo; fi
-printf '%s\n' 'Excluded: legacy installers, cursor-toggle.sh, Soundbox, and restore/install helper entry points. The original Ina media widget is selected.'
+# dconf's read client may create a runtime cache. Confine it to disposable
+# scratch space while retaining the real user's configuration and session bus.
+if ! "$apply"; then
+    need mktemp rm
+    preview_runtime="$(mktemp -d "${TMPDIR:-/tmp}/ina-preview-runtime-XXXXXXXX")"
+    trap 'rm -rf -- "$preview_runtime"' EXIT
+    export XDG_RUNTIME_DIR="$preview_runtime"
+fi
+printf '%s\n' 'Excluded: legacy installers, cursor-toggle.sh, all music widgets, and restore/install helper entry points.'
 for component in "${selected[@]}"; do
     args_for "$component"
+    if [[ "$component" == lockscreen ]] && "$local_lock_images" && ! "$enable_lock"; then
+        printf '%s\n' 'Lock images already configured; live rotation requires --enable-lock-rotation.'
+        continue
+    fi
     printf 'Previewing %s\n' "$component"
     bash "$SCRIPTS/$component.sh" "${args[@]}" --dry-run
 done
@@ -314,11 +520,12 @@ if "$enable_lock"; then printf '%s\n' 'Live lock rotation selected: active scree
 if "$apply"; then
     for component in "${selected[@]}"; do
         args_for "$component"
+        if [[ "$component" == lockscreen ]] && "$local_lock_images" && ! "$enable_lock"; then continue; fi
         printf 'Applying %s. Recovery: bash %q --component %q --apply\n' "$component" "$SCRIPTS/restore.sh" "$component"
         [[ "$component" != lockscreen ]] || printf 'Download recovery: bash %q --component lockscreen-images --apply\n' "$SCRIPTS/restore.sh"
         bash "$SCRIPTS/$component.sh" "${args[@]}" --apply
     done
-    if "$enable_lock" && ! "$grub_only"; then
+    if "$enable_lock" && ! "$grub_only" && ! "$local_lock_images"; then
         lock_config="${XDG_DATA_HOME:-$HOME/.local/share}/ina/lockscreen/assets.json"
         bash "$SCRIPTS/lockscreen.sh" --asset-config "$lock_config" --approved --force-lock-on-activation --apply-desktop --dry-run
         bash "$SCRIPTS/lockscreen.sh" --asset-config "$lock_config" --approved --force-lock-on-activation --apply-desktop --apply
