@@ -17,7 +17,16 @@ css="$(cat <<EOF
 /* Nemo desktop windows inherit nemo-window; keep wallpaper and desktop labels theme-controlled. */
 .nemo-window:not(.nemo-desktop-window), .nemo-window:not(.nemo-desktop-window) .view { background-color: $INA_ABYSS; color: $INA_ANCIENT_PARCHMENT; }
 .nemo-window:not(.nemo-desktop-window) .sidebar, .nemo-window:not(.nemo-desktop-window) .sidebar .view { background-color: $INA_DEEP_VIOLET; color: $INA_MUTED_TEXT; }
-.nemo-window:not(.nemo-desktop-window) .view:selected, .nemo-window:not(.nemo-desktop-window) .sidebar .view:selected { background-color: $INA_DEEP_VIOLET; color: $INA_ANCIENT_PARCHMENT; border-color: $INA_TENTACLE_PURPLE; }
+/* Cover icon canvas and list selections, including unfocused windows. */
+.nemo-window:not(.nemo-desktop-window) .view:selected,
+.nemo-window:not(.nemo-desktop-window) .view:selected:focus,
+.nemo-window:not(.nemo-desktop-window) .view:selected:backdrop,
+.nemo-window:not(.nemo-desktop-window) .nemo-canvas-item:selected,
+.nemo-window:not(.nemo-desktop-window) .nemo-canvas-item:selected:focus,
+.nemo-window:not(.nemo-desktop-window) .nemo-canvas-item:selected:backdrop,
+.nemo-window:not(.nemo-desktop-window) .sidebar .view:selected { background-image: none; background-color: $INA_ANCIENT_PARCHMENT; color: $INA_INK; border-color: $INA_ANCIENT_PARCHMENT; }
+.nemo-window:not(.nemo-desktop-window) rubberband,
+.nemo-window:not(.nemo-desktop-window) .rubberband { background-color: alpha($INA_ANCIENT_PARCHMENT, 0.25); border: 1px solid $INA_ANCIENT_PARCHMENT; }
 .nemo-window:not(.nemo-desktop-window) toolbar { background-image: none; background-color: $INA_DEEP_VIOLET; color: $INA_ANCIENT_PARCHMENT; }
 .nemo-window:not(.nemo-desktop-window) entry:focus { border-color: $INA_ELDRITCH_TEAL; }
 /* Ina Nemo end */

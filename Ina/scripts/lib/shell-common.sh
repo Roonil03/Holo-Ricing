@@ -330,7 +330,7 @@ ina_restore_records() {
             current="$(stat -c '%a' -- "$path")"
             [[ "$current" == "$mode" || "$current" == "$(jq -r '.applied_mode // .mode' <<< "$entry")" ]] || ina_error "File permissions changed externally: $path"
         fi
-        if [[ "$INA_COMPONENT" == widgets && "$path" == "$INA_CONFIG/cinnamon/spices/"*.json ]]; then
+        if [[ "$INA_COMPONENT" == widgets && "$path" == "$INA_CONFIG/cinnamon/spices/"*.json ]] && ! jq -e '.removed_file == true' <<< "$entry" >/dev/null; then
             text='{}'; [[ ! -f "$path" ]] || text="$(cat -- "$path")"
             entry="$(ina_widget_migrate_entry "$path" "$entry" "$text")"
             INA_JSON="$(jq --arg p "$path" --argjson e "$entry" '.files[$p]=$e' <<< "$INA_JSON")"

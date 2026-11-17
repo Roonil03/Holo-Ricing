@@ -2,13 +2,10 @@
 set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/shell-common.sh"
+source "$SCRIPT_DIR/lib/widget-removal.sh"
 ina_init widgets "$@"
 ina_desktop
-printf '%s\n' 'Available: clock, calendar, system, media.'
-if (("${#INA_WIDGETS[@]}" == 0)); then
-    "$INA_DRY" || ina_error 'Select widgets with --widgets clock calendar system media'
-    exit 0
-fi
+printf '%s\n' 'Available: clock, calendar, system. The retired Ina music desklet is removed.'
 ina_array_read "$(ina_get org.cinnamon enabled-desklets)"
 current=("${INA_ARRAY[@]}")
 next="$(ina_get org.cinnamon next-desklet-id)"
@@ -30,7 +27,6 @@ for name in "${INA_WIDGETS[@]}"; do
         clock) source_theme=/usr/share/cinnamon/desklets/clock@cinnamon.org ;;
         calendar) source_theme="$SCRIPT_DIR/../vendor/desklets/calendar@deeppradhan" ;;
         system) source_theme="$SCRIPT_DIR/../vendor/desklets/system-monitor-graph@rcassani" ;;
-        media) source_theme="$SCRIPT_DIR/../desklets/ina-media@holo-ricing" ;;
         *) ina_error "Unavailable widget: $name" ;;
     esac
     schema_path="$(ina_path "$source_theme/settings-schema.json")"
@@ -45,14 +41,14 @@ done
 declare -A seen=()
 reloads=()
 ina_begin
+ina_remove_media
 for name in "${INA_WIDGETS[@]}"; do
     [[ -z "${seen[$name]:-}" ]] || continue
     seen["$name"]=1
     case "$name" in
         clock) uuid=clock@cinnamon.org; x=30; y=30; source_theme="/usr/share/cinnamon/desklets/$uuid" ;;
         calendar) uuid=calendar@deeppradhan; x=30; y=140; source_theme="$SCRIPT_DIR/../vendor/desklets/$uuid" ;;
-        system) uuid=system-monitor-graph@rcassani; x=400; y=140; source_theme="$SCRIPT_DIR/../vendor/desklets/$uuid" ;;
-        media) uuid=ina-media@holo-ricing; x=400; y=380; source_theme="$SCRIPT_DIR/../desklets/$uuid" ;;
+        system) uuid=system-monitor-graph@rcassani; x=0; y=0; source_theme="$SCRIPT_DIR/../vendor/desklets/$uuid" ;;
         *) ina_error "Unavailable widget: $name" ;;
     esac
     identity=''
@@ -84,6 +80,27 @@ for name in "${INA_WIDGETS[@]}"; do
     fi
     config="$(ina_user_path "$INA_CONFIG/cinnamon/spices/$uuid/$identity.json")"
     settings="$schema"; [[ ! -f "$config" ]] || settings="$(cat -- "$config")"
+    if [[ "$name" == system ]]; then
+        ina_need python3
+        scale="$(jq -r '."scale-size".value // ."scale-size".default // 1' <<< "$settings")"
+        if position="$(python3 "$SCRIPT_DIR/lib/widget-position.py" "$scale" "$INA_TEST")"; then
+            read -r x y <<< "$position"
+            printf 'System widget: primary monitor work area, upper right at %s,%s\n' "$x" "$y"
+            # Reposition existing instances as well as newly allocated ones, without changing IDs.
+            for index in "${!current[@]}"; do
+                if [[ "${current[$index]}" == "$uuid:$identity:"* ]]; then current[$index]="$uuid:$identity:$x:$y"; fi
+            done
+        elif "$INA_DRY"; then
+            printf '%s\n' 'System widget position unresolved in preview. Apply requires the primary monitor work area.' >&2
+            # Do not preview an invented position. Existing coordinates remain;
+            # a new instance is listed only once geometry can be resolved.
+            if ! "$existing"; then
+                pending=()
+                for entry in "${current[@]}"; do [[ "$entry" == "$uuid:$identity:"* ]] || pending+=("$entry"); done
+                current=("${pending[@]}")
+            fi
+        else ina_error 'Cannot determine the system widget position'; fi
+    fi
     settings="$(jq -n --argjson schema "$schema" --argjson old "$settings" '
         if ($old|type) != "object" then error("Expected widget settings object") else
         reduce ($schema|keys[]) as $k ($old;
@@ -96,7 +113,6 @@ for name in "${INA_WIDGETS[@]}"; do
     case "$name" in
         clock) overrides="$(jq -n --arg c "$(rgb "$INA_ANCIENT_PARCHMENT")" '{"font-size":36,"text-color":$c,"use-custom-format":true,"date-format":"%H:%M"}')" ;;
         calendar) overrides="$(jq -n --arg c "$(rgb "$INA_ANCIENT_PARCHMENT")" --arg b "$(rgb "$INA_ABYSS")" --arg s "$(rgb "$INA_LAVENDER")" --arg a "$(rgb "$INA_SOFT_PEACH")" '{"colour-text":$c,"colour-background":$b,"colour-sundays":$s,"colour-saturdays":$a}')" ;;
-        media) overrides="$(jq -n --arg c "$(rgb "$INA_ANCIENT_PARCHMENT")" --arg b "$(rgb "$INA_ABYSS")" --arg a "$(rgb "$INA_ELDRITCH_TEAL")" '{"foreground":$c,"background":$b,"accent":$a}')" ;;
         system) overrides="$(jq -n --argjson schema "$schema" --arg c "$(rgba "$INA_ANCIENT_PARCHMENT")" --arg b "$(rgba "$INA_ABYSS")" --arg m "$(rgba "$INA_DEEP_VIOLET")" --arg l "$(rgba "$INA_ELDRITCH_TEAL")" '
             reduce ($schema|keys[]|select(startswith("line-color-"))) as $k
             ({"refresh-interval":2,"text-color":$c,"background-color":$b,"midline-color":$m}; .[$k]=$l)')" ;;

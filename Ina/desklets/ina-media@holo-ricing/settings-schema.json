@@ -1,5 +1,0 @@
-{
-  "background": {"type":"colorchooser", "default":"rgb(21,16,34)", "description":"Background"},
-  "foreground": {"type":"colorchooser", "default":"rgb(241,223,194)", "description":"Text"},
-  "accent": {"type":"colorchooser", "default":"rgb(103,196,194)", "description":"Controls"}
-}
