@@ -1,0 +1,19 @@
+/* Original project code, MIT. GTK 3 renders Cinnamon's existing wallpaper
+ * surface. No replacement window, media player, authentication or input code.
+ * Exact ancestry: Stage > Overlay > MonitorView(Gtk.Bin) > WallpaperStack > Image.
+ * In particular this excludes the unlock dialog, media controls and OSK images.
+ */
+@keyframes ina-lock-pan-zoom {
+    from { -gtk-icon-transform: scale(1.06) translate(-4px, -2px); }
+    to   { -gtk-icon-transform: scale(1.14) translate(4px, 2px); }
+}
+
+.csstage > overlay > widget > stack > image {
+    animation-name: ina-lock-pan-zoom;
+    animation-duration: 24s;
+    /* 360 changes per 24-second leg: at most 15 new transform values/second.
+     * GTK owns the frame clock; this does not change its global refresh rate. */
+    animation-timing-function: steps(360, end);
+    animation-iteration-count: infinite;
+    animation-direction: alternate;
+}
