@@ -313,7 +313,9 @@ def restore(ctx, component):
             raise Error(f'Backup contains a path outside the user directory: {file}')
         current = base64.b64encode(file.read_bytes()).decode() if file.exists() else None
         if 'block_marker' in entry:
-            text = file.read_text() if file.exists() else ''
+            # Keep unrelated CSS line endings and text exact when removing a
+            # managed block; text-mode newline conversion would alter them.
+            text = file.read_bytes().decode('utf-8') if file.exists() else ''
             pattern = block_pattern(entry['block_marker'])
             matches = list(re.finditer(pattern, text, flags=re.DOTALL))
             if len(matches) > 1 or (matches[0].group() if matches else '') not in (entry['block_original'], entry['block_applied']):

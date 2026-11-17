@@ -1,6 +1,7 @@
-"""Lock wallpaper setup and isolated rotation model."""
+"""Continuous lock wallpaper setup and isolated selection models."""
 import json
 import os
+import re
 import base64
 import secrets
 import stat
@@ -8,7 +9,7 @@ import sys
 import subprocess
 import tempfile
 from pathlib import Path
-from engine import Error, atomic, reject_links
+from engine import Error, atomic, block_pattern, reject_links
 
 DESKTOP = True
 SOURCES = Path(__file__).resolve().parents[3] / 'dotfiles' / 'image-sources.json'
@@ -71,6 +72,49 @@ class Rotation:
             atomic(self.state, content.encode())
 
 
+class Motion:
+    """The stock lock widget animates the first still; no URI frame updates."""
+    def __init__(self, ctx, images, desktop):
+        self.ctx, self.image, self.desktop = ctx, images[0], desktop
+        self.locked = False
+
+    def event(self, event):
+        if event == 'locked' and not self.locked:
+            self.ctx.setting('org.cinnamon.desktop.background', 'picture-uri', self.image.as_uri())
+            self.locked = True
+        elif event in ('unlocked', 'lost-session', 'exit') and self.locked:
+            self.ctx.setting('org.cinnamon.desktop.background', 'picture-uri', self.desktop.as_uri())
+            self.locked = False
+        elif event not in ('locked', 'tick', 'unlocked', 'lost-session', 'exit'):
+            raise Error('Unsupported lock event.')
+
+
+def motion_styles(ctx):
+    """Prepare a first-position GTK import, retaining all unrelated user CSS."""
+    source = Path(__file__).resolve().parents[3] / 'dotfiles/lockscreen-motion.css'
+    asset = reject_links(ctx.data / 'ina/lockscreen/lockscreen-motion.css')
+    gtk = reject_links(ctx.config / 'gtk-3.0/gtk.css')
+    marker = 'Ina lockscreen motion'
+    text = gtk.read_bytes().decode('utf-8') if gtk.exists() else ''
+    matches = list(re.finditer(block_pattern(marker), text, flags=re.DOTALL))
+    if len(matches) > 1:
+        raise Error(f'Duplicate owned CSS blocks in {gtk}')
+    current = matches[0].group() if matches else ''
+    entry = ctx.manifest['files'].get(str(gtk))
+    if entry and entry.get('block_marker') == marker:
+        if current not in (entry['block_original'], entry['block_applied']):
+            raise Error(f'Owned CSS block changed since application: {gtk}')
+    elif current:
+        raise Error(f'Refusing to replace an unowned CSS block in {gtk}')
+    # The leading newline belongs to our block, so generic block restoration
+    # cannot consume a user-added newline immediately before the marker.
+    block = (f'\n/* {marker} begin */\n@import url("{asset.as_uri()}");\n'
+             f'/* {marker} end */\n')
+    remainder = re.sub(block_pattern(marker), '', text, flags=re.DOTALL)
+    return asset, source.read_bytes(), gtk, block + remainder, {
+        'original': current, 'marker': marker, 'applied': block}
+
+
 def unit_arg(value):
     # systemd unit syntax, including percent specifier expansion.
     value = str(value).replace('%', '%%').replace('\\', '\\\\').replace('"', '\\"')
@@ -113,6 +157,7 @@ def install_service(ctx, images, desktop):
     state = reject_links(ctx.state / 'lock-rotation-live.json')
     lock_path = reject_links(ctx.state / 'lock-rotation-live.lock')
     source = Path(__file__).resolve().parents[1] / 'lockscreen-worker.py'
+    style, style_bytes, gtk_css, gtk_text, style_block = motion_styles(ctx)
     if lock_path.exists():
         info = lock_path.stat()
         if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or
@@ -133,16 +178,16 @@ def install_service(ctx, images, desktop):
             data = json.loads(current)
             if set(data) != {'token', 'next_index'} or data['token'] != token or type(data['next_index']) is not int or not 0 <= data['next_index'] < 3:
                 raise Error('Rotation state changed externally.')
-    text = json.dumps({'native_helper': str(native), 'desktop_image': str(desktop), 'lock_images': [str(p) for p in images],
+    text = json.dumps({'mode': 'motion', 'native_helper': str(native), 'desktop_image': str(desktop), 'lock_images': [str(p) for p in images],
                        'state': str(state), 'token': token, 'lock_path': str(lock_path)}, indent=2) + '\n'
     command = ' '.join(unit_arg(p) for p in ('/usr/bin/python3', worker, config))
-    unit_text = ('[Unit]\nDescription=Ina lockscreen wallpaper rotation\n'
+    unit_text = ('[Unit]\nDescription=Ina lockscreen wallpaper motion\n'
                  'After=graphical-session-pre.target\n\n[Service]\nType=simple\n'
                  f'ExecStartPre={command} --check\nExecStart={command}\nExecStopPost={command} --restore\n'
                  'KillMode=process\nRestart=on-failure\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n')
     managed = bool(ctx.manifest.get('service_managed'))
     # Never execute an externally edited unit or its ExecStopPost helper.
-    for path in (lock_path, worker, native, config, unit):
+    for path in (lock_path, worker, native, config, unit, style):
         path = reject_links(path)
         entry = ctx.manifest['files'].get(str(path))
         if entry:
@@ -186,6 +231,8 @@ def install_service(ctx, images, desktop):
         ctx.file(native, binary, 0o700)
         ctx.file(config, text, 0o600)
         ctx.file(unit, unit_text, 0o600)
+        ctx.file(style, style_bytes, 0o600)
+        ctx.file(gtk_css, gtk_text, block=style_block)
         ctx.setting('org.cinnamon.desktop.screensaver', 'lock-enabled', True)
         ctx.setting('org.cinnamon.desktop.background.slideshow', 'slideshow-enabled', False)
         ctx.setting('org.cinnamon.desktop.background', 'picture-uri', desktop.as_uri())
@@ -209,7 +256,8 @@ def install_service(ctx, images, desktop):
                     original, _, mode = ctx.run_files[state]
                     ctx.run_files[state] = (original, current, mode)
         raise
-    print('Enabled ina-lockscreen.service with native wallpaper helper. Active screensavers will be locked immediately.')
+    print('Enabled ina-lockscreen.service with continuous GTK wallpaper motion. Active screensavers will be locked immediately.')
+    print('An already running Cinnamon screensaver loads the GTK style on its next natural process start; Ina never restarts an existing locker.')
 
 
 def run(ctx):
@@ -221,8 +269,8 @@ def run(ctx):
     for item in lock_sources:
         print(f"Selected {item['role']}: {item['url']}")
         print(f"Local download name: {item['filename']}")
-    print('Live mode explicitly locks each supervised Cinnamon screensaver before rotation.')
-    print('Native helper rotates three static images; Cinnamon supplies crossfades. Video and continuous motion are unsupported.')
+    print('Live mode explicitly locks each supervised Cinnamon screensaver before selecting the lock wallpaper.')
+    print('Native GTK animates the first approved still continuously; the native helper selects it once per lock. No video is decoded.')
     if not ctx.args.images or not ctx.args.image:
         print('Required paths: exactly three approved lock images and one approved static desktop image.')
         if not ctx.dry:
@@ -240,19 +288,20 @@ def run(ctx):
         raise Error('Supply exactly three distinct lock images, including no hard-link duplicates.')
     if (desktop.stat().st_dev, desktop.stat().st_ino) in identities:
         raise Error('The static desktop image must be independent of the lock images.')
-    print('Rotation order: ' + ', '.join(str(p) for p in images) + '. Interval: 300 seconds while locked.')
+    print('Continuous lock motion image: ' + str(images[0]))
+    print('The other two approved images remain in the configuration for compatibility with previous rotation services.')
     print('Restore static desktop: ' + str(desktop))
     if not ctx.test:
         if not ctx.args.force_lock_on_activation:
             if not ctx.dry:
-                raise Error('Live rotation requires --force-lock-on-activation: an active screensaver will be locked immediately.')
+                raise Error('Live wallpaper setup requires --force-lock-on-activation: an active screensaver will be locked immediately.')
             print('Live setup requires --force-lock-on-activation.')
             return
         install_service(ctx, images, desktop)
         return
     if ctx.dry:
         return
-    model = Rotation(ctx, images, desktop)
+    model = Motion(ctx, images, desktop)
     # Test-only events. The default round trip finishes with the static image.
     try:
         for event in ctx.args.simulate_events or ['locked', 'tick', 'tick', 'unlocked']:

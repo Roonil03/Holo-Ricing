@@ -115,8 +115,11 @@ class NativeWallpaper:
 
 
 class Worker:
-    def __init__(self, bus, settings, desktop, images, state=None, token=None):
+    def __init__(self, bus, settings, desktop, images, state=None, token=None, mode='rotation'):
+        if mode not in ('rotation', 'motion'):
+            raise ValueError('Unsupported lock wallpaper mode')
         self.bus, self.settings, self.desktop, self.images = bus, settings, desktop, images
+        self.mode = mode
         self.state, self.token = state, token
         self.child = None
         self.locked = False
@@ -157,9 +160,13 @@ class Worker:
         self.locked, self.owner, self.next_tick = False, None, None
 
     def advance(self, now):
-        if not self.settings.set_string('picture-uri', image_uri(self.images[self.index])):
+        index = 0 if self.mode == 'motion' else self.index
+        if not self.settings.set_string('picture-uri', image_uri(self.images[index])):
             raise RuntimeError('Could not set lock wallpaper')
         Gio.Settings.sync()
+        if self.mode == 'motion':
+            self.next_tick = None
+            return
         if self.state:
             self.save_index()
         else:
@@ -197,7 +204,7 @@ class Worker:
                     return
                 self.locked, self.owner = True, owner
                 self.advance(now)
-            elif now >= self.next_tick:
+            elif self.next_tick is not None and now >= self.next_tick:
                 self.advance(now)
         except GLib.Error:
             if self.locked:
@@ -261,7 +268,9 @@ def run(config, action, lock_fd):
         raise ValueError('Images must be distinct')
     for p in images:
         image_uri(p)
-    worker = Worker(None, None, desktop, images, Path(config['state']), config['token'])
+    # Configurations installed before motion support retain their rotation mode.
+    worker = Worker(None, None, desktop, images, Path(config['state']), config['token'],
+                    mode=config.get('mode', 'rotation'))
     if action == '--check':
         subprocess.run([str(helper), '--check', config['desktop_image'], *images], check=True)
         return
