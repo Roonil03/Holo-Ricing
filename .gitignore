@@ -1,0 +1,4 @@
+/deliverables.txt
+__pycache__/
+*.pyc
+/Ina/tests/

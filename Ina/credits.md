@@ -1,0 +1,46 @@
+# Credits for Ina Mint Rice
+
+| Component | Source | Link |
+| --- | --- | --- |
+| Desktop wallpaper used by `desktop-bg.sh` | Alpha Coders / Wallpaper Abyss, artist BoYiMa | [Source page](https://wall.alphacoders.com/big.php?i=1279500), [image URL](https://images8.alphacoders.com/127/1279500.png) |
+| Login background used by `login_screen.sh` | GoodFon, uploader Radjah; original creator [unverified] | [Source page](https://anime.goodfon.com/senen/wallpaper-virtual-youtuber-hololive-ninomae-ina-nis-puzyri-anime-ulybk.html), [image URL](https://img.goodfon.com/original/3840x2160/1/4a/virtual-youtuber-hololive-ninomae-ina-nis-puzyri-anime-ulybk.jpg) |
+| Tako Takover GIF used by `bootlogo.sh` | Tenor, uploader leotsukinaga; original creator [unverified] | [Source page](https://tenor.com/view/tako-takover-ninomae-ina%27nis-ina-tellingbones-gif-47160874351700641), [GIF URL](https://media.tenor.com/AKeMkLsHqqEAAAAi/tako-takover-ninomae-ina%27nis.gif) |
+| Takodachi Jump GIF used by `login_screen.sh` | Tenor, uploader bruhwat; original creator [unverified] | [Source page](https://tenor.com/view/takodachi-ina-hololive-ina-takodachi-takodachi-jump-gif-23401272), [GIF URL](https://media.tenor.com/1vhgkHU7lI0AAAAj/takodachi-ina.gif) |
+| Mint-Y-Purple icons | Linux Mint mint-y-icons, Sam Hewitt and Alexey Varfolomeev | [mint-y-icons](https://github.com/linuxmint/mint-y-icons) |
+| Mint-Y window controls and button artwork | Linux Mint mint-themes and contributors | [mint-themes](https://github.com/linuxmint/mint-themes) |
+| Mint-Y-Dark Cinnamon panel base | Linux Mint mint-themes and contributors | [mint-themes](https://github.com/linuxmint/mint-themes) |
+| Nemo theme selector reference | Linux Mint mint-themes | [mint-themes](https://github.com/linuxmint/mint-themes) |
+| DMZ-White cursor | Novell, Inc.; installed dmz-cursor-theme package | [Source package copyright](https://sources.debian.org/src/dmz-cursor-theme/0.4.5/debian/copyright/) |
+| Cinnamon clock desklet | Linux Mint Cinnamon and contributors | [Clock desklet](https://github.com/linuxmint/cinnamon/tree/master/files/usr/share/cinnamon/desklets/clock%40cinnamon.org) |
+| Calendar desklet | Deep Pradhan, linuxmint/cinnamon-spices-desklets | [Calendar source](https://github.com/linuxmint/cinnamon-spices-desklets/tree/2b8413677a1d88e7259a4b5527d239dfe660dfc4/calendar%40deeppradhan/files/calendar%40deeppradhan) |
+| System Monitor Graph desklet | rcassani, linuxmint/cinnamon-spices-desklets | [System Monitor Graph source](https://github.com/linuxmint/cinnamon-spices-desklets/tree/2b8413677a1d88e7259a4b5527d239dfe660dfc4/system-monitor-graph%40rcassani/files/system-monitor-graph%40rcassani) |
+| UPower interface snippet in System Monitor Graph | Schorschii, battery desklet | [Battery desklet source](https://github.com/linuxmint/cinnamon-spices-desklets/tree/2b8413677a1d88e7259a4b5527d239dfe660dfc4/battery%40schorschii) |
+| CPU utilization reference in System Monitor Graph | Rosetta Code | [Linux CPU utilization](https://rosettacode.org/wiki/Linux_CPU_utilization) |
+| Disk utilization reference in System Monitor Graph | Stack Overflow | [iostat utilization discussion](https://stackoverflow.com/questions/4458183/how-the-util-of-iostat-is-computed) |
+| gTile extension used by `tiling-window.sh` | Linux Mint Cinnamon Spices, gTile@shuairan | [gTile source](https://github.com/linuxmint/cinnamon-spices-extensions/tree/master/gTile%40shuairan) |
+| xcursorgen used by `login_screen.sh` | X.Org, freedesktop.org | [xcursorgen source](https://gitlab.freedesktop.org/xorg/app/xcursorgen) |
+| Electroharmonix font used by `login_screen.sh` | Raymond Larabie / Typodermic Fonts, DaFont | [Electroharmonix](https://www.dafont.com/electroharmonix.font) |
+| Local Ninomae Ina'nis cursor archive used by `cursor-toggle.sh` | User-provided Downloads archive; original source and creator [unverified] | [Archive reference](scripts/cursor-toggle.sh) |
+| Takodachi text artwork used by `fastfetch.sh` and `neofetch.sh` | Existing project dotfiles; original source and creator [unverified] | [Fastfetch artwork](dotfiles/tako-ascii.txt), [Neofetch artwork](dotfiles/tako-ascii-neofetch.txt) |
+| GRUB background, Alpha Coders wallpaper 1123929 | mistimagi, Alpha Coders | [Original wallpaper](https://wall.alphacoders.com/big.php?i=1123929), [selected JPEG](https://images3.alphacoders.com/112/1123929.jpg) |
+| GRUB menu layout and three dark selection pieces | Aleph1-9012, Evangelion | [Reference design](https://www.gnome-look.org/p/2370768), [original menu](https://github.com/Aleph1-9012/Evangelion/blob/fb785c3009a9346173d4b893d6aa36dd22052335/themes/eva01/1080p/theme.txt), [selection pieces](https://github.com/Aleph1-9012/Evangelion/tree/fb785c3009a9346173d4b893d6aa36dd22052335/themes/eva01/1080p/selectors) |
+| Lock-screen JPEG 1, Ninomae Ina'nis winter forest thumbnail | MoeWalls; original artist [unverified] | [Selected thumbnail](https://moewalls.com/wp-content/uploads/2023/03/ninomae-inanis-winter-forest-virtual-youtuber-thumb.jpg), [source page](https://moewalls.com/anime/ninomae-inanis-winter-forest-virtual-youtuber-live-wallpaper/) |
+| Lock-screen JPEG 2, Ina background 4 | ArtStation; exact creator [unverified] | [Selected JPEG](https://cdnb.artstation.com/p/assets/images/images/054/888/645/large/noah-who-ina-background-4.jpg?1665599243), [artist portfolio](https://ubebop.artstation.com/) |
+| Lock-screen JPEG 3, Ina background 1 | ArtStation; exact creator [unverified] | [Selected JPEG](https://cdnb.artstation.com/p/assets/images/images/054/888/649/large/noah-who-ina-background-1.jpg?1665599247), [artist portfolio](https://ubebop.artstation.com/) |
+| Lock-screen JPEG 4, Ina artwork f6f3c94810b2fb5f78d493a162a0fd6b | Danbooru / donmai.us; original artist [unverified] | [Selected JPEG](https://cdn.donmai.us/original/f6/f3/f6f3c94810b2fb5f78d493a162a0fd6b.jpg) |
+| Lock-screen JPEG 5, Ina avatar | Siliconera; article credits Ninomae Ina'nis' YouTube; original illustrator [unverified] | [Selected JPEG](https://www.siliconera.com/wp-content/uploads/2023/04/ina-hololive-avatar.jpg), [source article](https://www.siliconera.com/ninomae-inanis-new-outfit-debut-dated/) |
+| Lock-screen JPEG 6, Meconopsis | Reactor CDN; Mazu / mazumaro, exact original-post association [unverified] | [Selected JPEG](https://img1.reactor.cc/pics/post/full/mazumaro-Ninomae-Ina%27nis-Hololive-Virtual-YouTuber-8455417.jpeg), [artist post](https://x.com/mazumaro/status/1795029803386466354) |
+| Lock-screen JPEG 7, Ina under a blue sky | Reactor CDN; filename attributes chrispy tuna, original creator [unverified] | [Selected JPEG](https://img2.reactor.cc/pics/post/full/chrispy-tuna-Ninomae-Ina%27nis-Hololive-Virtual-YouTuber-8656218.jpeg) |
+| Lock-screen JPEG 8, smiling Ina portrait | JoyReactor CDN; artwork signed floomf, original post [unverified] | [Selected JPEG](https://img1.joyreactor.com/pics/post/full/floomf-Ninomae-Ina%27nis-Hololive-9192157.jpeg) |
+
+## Legal notice
+
+All third-party artwork, animations, fonts, themes, icons, cursors, and code referenced or included in this project remain subject to their creators' and other rights holders' copyrights, licenses, and applicable public-domain dedications. The repository author claims no ownership of those third-party rights. Attribution or inclusion of a link does not grant permission to copy, modify, or redistribute an asset.
+
+Ninomae Ina'nis, hololive, and related names, character designs, and marks belong to their respective rights holders, including Cover Corp. This is an unofficial fan project and is not affiliated with, sponsored by, or endorsed by those rights holders. See [Cover's derivative works guidelines](https://hololivepro.com/en/terms/).
+
+The adapted GRUB menu and three selection pieces retain their [Apache 2.0 license](vendor/grub-evangelion/LICENSE) and [source and modification notice](vendor/grub-evangelion/NOTICE).
+
+The repository's [MIT license](../LICENSE) applies only to original project code unless a file states otherwise. Third-party license notices remain applicable, including the retained [Calendar license](vendor/desklets/calendar@deeppradhan/LICENSE) and [System Monitor Graph license](vendor/desklets/system-monitor-graph@rcassani/LICENSE).
+
+The linked Alpha Coders wallpapers are listed for private, personal use; other use requires contacting their artists. The selected GRUB and lock-screen wallpapers are downloaded only to user-local directories and are not bundled in this repository. Redistribution rights for the GoodFon wallpaper and both Tenor GIFs are [unverified]. These credits do not authorize their redistribution or certify that use of any linked asset complies with applicable law. Consult each original source and rights holder before using an asset beyond its documented permissions.
