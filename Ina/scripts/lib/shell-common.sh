@@ -184,6 +184,30 @@ ina_exit() {
     exit "$status"
 }
 ina_finish() { INA_FINISHED=true; }
+ina_refresh_window_controls() {
+    [[ "$INA_COMPONENT" == window-controls ]] || return 0
+    # Tests and previews must never contact the real desktop session.
+    [[ -z "$INA_TEST" ]] || return 0
+    printf '%s\n' 'Refresh Cinnamon window controls from the managed GTK CSS block.'
+    "$INA_DRY" && return 0
+    local response expression refreshed=false
+    if command -v busctl >/dev/null 2>&1; then
+        # A typed string avoids gdbus reinterpreting JavaScript escapes as GVariant
+        # escapes. The static expression reads the installed CSS itself.
+        expression="$(cat -- "$SCRIPT_DIR/lib/window-controls-refresh.js")"
+        if response="$(busctl --user --auto-start=no --timeout=5s call \
+            org.Cinnamon /org/Cinnamon org.Cinnamon Eval s "$expression" 2>/dev/null)" &&
+            [[ "$response" == 'bs true '* && "$response" =~ INA_WINDOW_CONTROLS_REFRESHED:([1-9][0-9]*) ]]; then
+            printf 'Refreshed Cinnamon window controls (%s frame windows).\n' "${BASH_REMATCH[1]}"
+            refreshed=true
+        fi
+    fi
+    if [[ "${1:-}" == restore ]]; then
+        printf '%s\n' 'Window-control files were restored. Log out and back in to fully clear GTK styling cached when Cinnamon started; reopen GTK applications.'
+    elif ! "$refreshed"; then
+        printf '%s\n' 'Window-control files were saved; live Cinnamon refresh was unavailable. Log out and back in to reload GTK styling.' >&2
+    fi
+}
 ina_get() {
     local schema="$1" key="$2" result
     if [[ -n "$INA_TEST" && -f "$INA_TEST/settings.json" ]]; then
@@ -389,6 +413,7 @@ ina_restore_records() {
         printf 'Remove if empty: %s\n' "$path"
         if ! "$INA_DRY" && [[ -d "$path" ]]; then rmdir --ignore-fail-on-non-empty -- "$path"; fi
     done < <(jq -r '(.directories // []) | sort_by(length) | reverse | .[]' <<< "$INA_JSON")
+    ina_refresh_window_controls restore
 }
 ina_quote() {
     local value="$1"

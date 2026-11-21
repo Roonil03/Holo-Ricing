@@ -48,7 +48,7 @@ Omitting `--apply` previews a component. An explicit `--dry-run` takes precedenc
 | Component | Preview | Application and behavior |
 | --- | --- | --- |
 | [Icons](scripts/icons.sh) | `bash Ina/scripts/icons.sh --dry-run` | Add `--apply --apply-desktop`. Select installed Mint-Y-Purple after checking its installed license and source notice. |
-| [Window controls](scripts/window-controls.sh) | `bash Ina/scripts/window-controls.sh --dry-run` | Add `--apply --apply-desktop`. Recolour installed Mint-Y constants, copy the necessary SVGs and copyright notice into `Ina-Windows`, and put minimize, maximize, close on the right. Add GTK 3 headerbar colours and shadows. GTK 4 and application-drawn controls may ignore them. |
+| [Window controls](scripts/window-controls.sh) | `bash Ina/scripts/window-controls.sh --dry-run` | Add `--apply --apply-desktop`. Recolour installed Mint-Y constants, copy the necessary SVGs and copyright notice into `Ina-Windows`, and put minimize, maximize, close on the right. Use Ina parchment for minimize, maximize, and restore on dark GTK 3 header bars. Applying this component also refreshes Cinnamon's window frames. The live refresh uses `busctl`. If Cinnamon cannot refresh its frames, log out and back in. Reopen applications that draw their own GTK header bars to load the updated style. |
 | [Widgets](scripts/widgets.sh) | `bash Ina/scripts/widgets.sh --dry-run --widgets clock calendar system` | Add `--apply --apply-desktop`. Select the stock clock and vendored Calendar/System Monitor Graph. Preserve unrelated desklets and existing IDs. Retire this project's old music desklet. See details below. |
 | [VS Code](scripts/lib/components/vscode.py) | `bash Ina/scripts/vscode.sh --dry-run --settings "$HOME/.config/Code/User/settings.json"` | Add `--apply`. Merge palette and terminal colours, solid cursor, smooth scrolling, reduced workbench motion, and minimum terminal contrast 4.5. Retain comments, unrelated keys, font size, icon theme, and extensions. Malformed JSONC and duplicate keys are refused. |
 | [Firefox](scripts/lib/components/firefox.py) | `bash Ina/scripts/firefox.sh --dry-run` | List detected profiles. Select `--profile PATH`, optionally add `--user-chrome`, then add `--apply`. Close Firefox first. Write owned `user.js` preferences and optional toolbar CSS. Restart manually to load them. |
@@ -190,6 +190,8 @@ sudo update-grub
 Older installations may have selector files under `selectors/`; use the recipe/journal corresponding to that installation. At GRUB's prompt, `set theme=` then Esc is the documented rendering fallback, still [unverified]. No command automatically reboots.
 
 ## Backups and restoration
+
+Restoring window controls removes the temporary Cinnamon style provider. If Cinnamon started with Ina already applied, log out and back in to clear its startup copy of the GTK styles.
 
 Backups are stored at `$XDG_STATE_HOME/ina/backups/COMPONENT/manifest.json`, defaulting to `~/.local/state/ina/backups/COMPONENT/manifest.json`. State mode is 700 and manifest mode is 600. Bash journals use `ina-bash-1`; retained Python components use their earlier format. Originals include file existence, contents, modes, and setting values. First-application originals are retained across repeated applications, while interrupted runs attempt to roll back only their own changes. Operations share a transaction lock and use atomic file replacement. Sources: [Bash helpers](scripts/lib/shell-common.sh) and [Python engine](scripts/lib/engine.py).
 

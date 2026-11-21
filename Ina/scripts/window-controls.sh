@@ -59,3 +59,4 @@ ina_setting org.cinnamon.desktop.wm.preferences theme "'Ina-Windows'"
 ina_setting org.cinnamon.desktop.wm.preferences button-layout "':minimize,maximize,close'"
 printf '%s\n' 'GTK 4 and application-drawn controls may ignore these overrides [unverified].'
 ina_finish
+ina_refresh_window_controls
