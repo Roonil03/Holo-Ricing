@@ -8,14 +8,43 @@ source_theme=/usr/share/themes/Mint-Y/metacity-1
 notice=/usr/share/doc/mint-themes/copyright
 [[ -f "$source_theme/metacity-theme-3.xml" && -f "$notice" ]] || ina_error 'Installed Mint-Y window theme and copyright notice are required'
 grep -q 'License: GPL-3+' "$notice" || ina_error 'Installed Mint theme license could not be verified'
-xml="$(cat -- "$source_theme/metacity-theme-3.xml")"
 names=(C_title_focused C_title_unfocused C_wm_bg C_wm_bg_unfocused C_wm_border C_wm_border_unfocused C_wm_highlight C_button_close_bg_focused C_button_close_bg_hover C_button_close_bg_active C_icon_close_bg C_button_bg_hover C_button_bg_active C_icon_bg_focused C_icon_bg_unfocused C_icon_bg_hover C_icon_bg_active)
 colours=("$INA_ANCIENT_PARCHMENT" "$INA_MUTED_TEXT" "$INA_DEEP_VIOLET" "$INA_ABYSS" "$INA_ELDRITCH_TEAL" "$INA_TENTACLE_PURPLE" "$INA_LAVENDER" "$INA_WARNING_ACCENT" "$INA_SOFT_PEACH" "$INA_LAVENDER" "$INA_INK" "$INA_TENTACLE_PURPLE" "$INA_DEEP_VIOLET" "$INA_ANCIENT_PARCHMENT" "$INA_MUTED_TEXT" "$INA_ANCIENT_PARCHMENT" "$INA_ELDRITCH_TEAL")
-for index in "${!names[@]}"; do
-    name="${names[index]}"
-    [[ "$(grep -c "<constant name=\"$name\" value=" <<< "$xml")" == 1 ]] || ina_error "Unsupported Mint constant: $name"
-    xml="$(sed -E "s/(<constant name=\"$name\" value=\")[^\"]*(\"[[:space:]]*\\/>)/\\1${colours[index]}\\2/" <<< "$xml")"
-done
+# Validate and recolour in one pass instead of starting grep and sed for every
+# constant. Keep the source formatting so the generated theme stays unchanged.
+xml="$(awk -v names="${names[*]}" -v colours="${colours[*]}" '
+    BEGIN {
+        count = split(names, name, " ")
+        split(colours, colour, " ")
+        for (i = 1; i <= count; i++) {
+            marker[i] = "<constant name=\"" name[i] "\" value="
+            prefix[i] = marker[i] "\""
+        }
+    }
+    {
+        if (index($0, "<constant name=")) {
+            for (i = 1; i <= count; i++) {
+                if (!index($0, marker[i])) continue
+                seen[i]++
+                if (match($0, prefix[i] "[^\"]*\"[[:space:]]*/>")) {
+                    value_start = RSTART + length(prefix[i])
+                    rest = substr($0, value_start)
+                    sub(/^[^"]*/, colour[i], rest)
+                    $0 = substr($0, 1, value_start - 1) rest
+                }
+            }
+        }
+        print
+    }
+    END {
+        for (i = 1; i <= count; i++) {
+            if (seen[i] != 1) {
+                print "Error: Unsupported Mint constant: " name[i] > "/dev/stderr"
+                exit 1
+            }
+        }
+    }
+' "$source_theme/metacity-theme-3.xml")"
 mapfile -t images < <(grep -oE '<image filename="[^"]+"' "$source_theme/metacity-theme-3.xml" | sed 's/^<image filename="//;s/"$//' | sort -u)
 for image in "${images[@]}"; do
     [[ "$image" =~ ^[a-zA-Z0-9_-]+\.svg$ && -f "$source_theme/$image" ]] || ina_error "Unexpected or missing Mint artwork: $image"
