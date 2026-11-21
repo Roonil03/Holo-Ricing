@@ -27,6 +27,11 @@
 | Lock-screen JPEG 1, Ninomae Ina'nis winter forest thumbnail | MoeWalls; original artist [unverified] | [Selected thumbnail](https://moewalls.com/wp-content/uploads/2023/03/ninomae-inanis-winter-forest-virtual-youtuber-thumb.jpg), [source page](https://moewalls.com/anime/ninomae-inanis-winter-forest-virtual-youtuber-live-wallpaper/) |
 | Lock-screen JPEG 2, Ina background 4 | ArtStation; exact creator [unverified] | [Selected JPEG](https://cdnb.artstation.com/p/assets/images/images/054/888/645/large/noah-who-ina-background-4.jpg?1665599243), [artist portfolio](https://ubebop.artstation.com/) |
 | Lock-screen JPEG 3, Ina background 1 | ArtStation; exact creator [unverified] | [Selected JPEG](https://cdnb.artstation.com/p/assets/images/images/054/888/649/large/noah-who-ina-background-1.jpg?1665599247), [artist portfolio](https://ubebop.artstation.com/) |
+| Lock-screen JPEG 4, Ina artwork f6f3c94810b2fb5f78d493a162a0fd6b | Danbooru / donmai.us; original artist [unverified] | [Selected JPEG](https://cdn.donmai.us/original/f6/f3/f6f3c94810b2fb5f78d493a162a0fd6b.jpg) |
+| Lock-screen JPEG 5, Ina avatar | Siliconera; article credits Ninomae Ina'nis' YouTube; original illustrator [unverified] | [Selected JPEG](https://www.siliconera.com/wp-content/uploads/2023/04/ina-hololive-avatar.jpg), [source article](https://www.siliconera.com/ninomae-inanis-new-outfit-debut-dated/) |
+| Lock-screen JPEG 6, Meconopsis | Reactor CDN; Mazu / mazumaro, exact original-post association [unverified] | [Selected JPEG](https://img1.reactor.cc/pics/post/full/mazumaro-Ninomae-Ina%27nis-Hololive-Virtual-YouTuber-8455417.jpeg), [artist post](https://x.com/mazumaro/status/1795029803386466354) |
+| Lock-screen JPEG 7, Ina under a blue sky | Reactor CDN; filename attributes chrispy tuna, original creator [unverified] | [Selected JPEG](https://img2.reactor.cc/pics/post/full/chrispy-tuna-Ninomae-Ina%27nis-Hololive-Virtual-YouTuber-8656218.jpeg) |
+| Lock-screen JPEG 8, smiling Ina portrait | JoyReactor CDN; artwork signed floomf, original post [unverified] | [Selected JPEG](https://img1.joyreactor.com/pics/post/full/floomf-Ninomae-Ina%27nis-Hololive-9192157.jpeg) |
 
 ## Legal notice
 
