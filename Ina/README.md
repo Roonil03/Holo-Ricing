@@ -53,8 +53,8 @@ Omitting `--apply` previews a component. An explicit `--dry-run` takes precedenc
 | [VS Code](scripts/lib/components/vscode.py) | `bash Ina/scripts/vscode.sh --dry-run --settings "$HOME/.config/Code/User/settings.json"` | Add `--apply`. Merge palette and terminal colours, solid cursor, smooth scrolling, reduced workbench motion, and minimum terminal contrast 4.5. Retain comments, unrelated keys, font size, icon theme, and extensions. Malformed JSONC and duplicate keys are refused. |
 | [Firefox](scripts/lib/components/firefox.py) | `bash Ina/scripts/firefox.sh --dry-run` | List detected profiles. Select `--profile PATH`, optionally add `--user-chrome`, then add `--apply`. Close Firefox first. Write owned `user.js` preferences and optional toolbar CSS. Restart manually to load them. |
 | [Gaming mode](scripts/gaming-mode.sh) | `bash Ina/scripts/gaming-mode.sh --dry-run -- your-game` | Add `--apply --apply-desktop`. Suppress notifications and desktop/workspace effects during the supplied command. Restore on exit. Optional `--power-profile balanced` selects an available profile. |
-| [Lockscreen images](scripts/lockscreen.sh) | `bash Ina/scripts/lockscreen.sh --download-images --dry-run` | Add `--apply --approved`. Download exactly three selected JPEGs and write local `assets.json`. This preparation alone does not enable motion. |
-| [Live lock motion](scripts/lib/components/lockscreen.py) | `bash Ina/scripts/lockscreen.sh --dry-run --asset-config "$HOME/.local/share/ina/lockscreen/assets.json" --approved --force-lock-on-activation` | Add `--apply --apply-desktop`. Compile and install a managed C worker/helper and user service. Explicitly lock a supervised active screensaver, pan/zoom the wallpaper, cycle three images, and restore the independent desktop image on unlock. See limits below. |
+| [Lockscreen images](scripts/lockscreen.sh) | `bash Ina/scripts/lockscreen.sh --download-images --dry-run` | Add `--apply --approved`. Download the eight selected JPEGs and write local `assets.json`. This preparation alone does not enable motion. |
+| [Live lock motion](scripts/lib/components/lockscreen.py) | `bash Ina/scripts/lockscreen.sh --dry-run --asset-config "$HOME/.local/share/ina/lockscreen/assets.json" --approved --force-lock-on-activation` | Add `--apply --apply-desktop`. Compile and install a managed C worker/helper and user service. Explicitly lock a supervised active screensaver, pan/zoom the wallpaper, cycle the configured images, and restore the independent desktop image on unlock. See limits below. |
 | [Desktop wallpaper](scripts/wallpaper.sh) | `bash Ina/scripts/wallpaper.sh --dry-run --image /absolute/image.png --approved` | Add `--apply --apply-desktop`. Decode an approved static image, disable slideshow, select it with zoom. No download. |
 | [Cursor](scripts/cursor.sh) | `bash Ina/scripts/cursor.sh --dry-run` | Add `--apply --apply-desktop`. Select DMZ-White size 32 through Cinnamon settings and user GTK 3 `settings.ini`. Preserve unrelated GTK settings; reject duplicate cursor keys or Settings sections. Reopen applications if needed. |
 | [Taskbar](scripts/taskbar.sh) | `bash Ina/scripts/taskbar.sh --dry-run` | Add `--apply --apply-desktop`. Move the first panel on monitor 0 to the bottom at 40 px. Put menu/window list left, calendar center, and standard status applets right. Preserve custom applets, existing IDs, other panels, and clock formatting. `Ina-Panel` imports the installed Mint-Y-Dark Cinnamon CSS, including base menu styling. |
@@ -86,15 +86,20 @@ Music is unavailable. Application removes `ina-media@holo-ricing` from enabled d
 
 ## Image choices and downloads
 
-[assets.example.json](dotfiles/assets.example.json) contains `desktop_image`, exactly three `lock_images`, optional `grub_image`, reserved `login_image`, and `approved`. Populate it with absolute local paths and pass `--asset-config PATH`. Direct component commands require explicit `--approved`; the JSON field does not grant their approval. The combined runner has separate reuse rules for previously approved selections, described in [its guide](ina_rice.md). `login_image` is unused by these commands. The wallpaper command downloads nothing.
+[assets.example.json](dotfiles/assets.example.json) contains `desktop_image`, three to eight `lock_images`, optional `grub_image`, reserved `login_image`, and `approved`. Populate it with absolute local paths and pass `--asset-config PATH`. Direct component commands require explicit `--approved`; the JSON field does not grant their approval. The combined runner has separate reuse rules for previously approved selections, described in [its guide](ina_rice.md). `login_image` is unused by these commands. The wallpaper command downloads nothing.
 
 Selected images are fully decoded through GdkPixbuf and must be static. Header checks are also performed for Bash wallpaper/JPEG inputs. These checks do not establish copyright, permissions, safe subject matter, or the absence of flashing content in a source video. Use approved static files. Record original URL, author, license, retrieval date, exact reused paths, and modifications in [credits](credits.md); unresolved permissions remain [unverified].
 
-[image-sources.json](dotfiles/image-sources.json) records four selected download URLs, metadata, permissions status, and the recorded check date. The GRUB record identifies Alpha Coders wallpaper 1123929 by mistimagi for private personal use. The three lock JPEGs are ordered as:
+[image-sources.json](dotfiles/image-sources.json) records nine selected download URLs, metadata, permissions status, and the recorded check date. The GRUB record identifies Alpha Coders wallpaper 1123929 by mistimagi for private personal use. The lock JPEGs download in this order:
 
 1. MoeWalls winter forest thumbnail, `lock-1.jpg`.
 2. ArtStation background 4, `lock-2.jpg`.
 3. ArtStation background 1, `lock-3.jpg`.
+4. Donmai image `f6f3c948`, `lock-4.jpg`.
+5. Siliconera Ina avatar, `lock-5.jpg`.
+6. Reactor image 8455417, `lock-6.jpg`.
+7. Reactor image 8656218, `lock-7.jpg`.
+8. JoyReactor image 9192157, `lock-8.jpg`.
 
 The lock image authorship/permissions and exact ArtStation CDN associations retain the [unverified] qualifiers in that record. Download permission flags in configuration are not proof of redistribution rights. Image bytes are stored locally, not in the repository.
 
@@ -109,7 +114,9 @@ bash Ina/scripts/lockscreen.sh --download-images --dry-run --image /absolute/des
 bash Ina/scripts/lockscreen.sh --download-images --apply --approved --image /absolute/desktop.png
 ```
 
-Preparation writes `$XDG_DATA_HOME/ina/lockscreen/lock-1.jpg`, `lock-2.jpg`, `lock-3.jpg`, and `assets.json`, defaulting to `~/.local/share/ina/lockscreen`. Repeated preparation retains the existing desktop selection when `--image` is omitted. Without a selection, `desktop_image` is empty and live setup will refuse it. Preparation changes no service, login, wallpaper, or boot setting. Source: [shell preparation](scripts/lockscreen.sh).
+A fresh installation needs all eight image URLs to work. ArtStation returned HTTP 403 during the November 22 download check. If you already have the three original images, pass their configuration with `--asset-config PATH` during preparation. The downloader keeps those paths and fetches the five additions. See the [download script](scripts/lockscreen.sh).
+
+Preparation writes `$XDG_DATA_HOME/ina/lockscreen/lock-1.jpg` through `lock-8.jpg`, and `assets.json`, defaulting to `~/.local/share/ina/lockscreen`. Repeated preparation retains the existing desktop selection when `--image` is omitted. Without a selection, `desktop_image` is empty and live setup will refuse it. Preparation changes no service, login, wallpaper, or boot setting. Source: [shell preparation](scripts/lockscreen.sh).
 
 Preview and enable motion separately:
 
@@ -118,13 +125,13 @@ bash Ina/scripts/lockscreen.sh --dry-run --asset-config "$HOME/.local/share/ina/
 bash Ina/scripts/lockscreen.sh --apply --apply-desktop --asset-config "$HOME/.local/share/ina/lockscreen/assets.json" --approved --force-lock-on-activation
 ```
 
-For custom paths, `--image DESKTOP --images LOCK1 LOCK2 LOCK3 --approved` can replace `--asset-config`. All four must decode as static images and represent distinct files, including no hard-link duplicates. Live installation requires `--force-lock-on-activation`, which authorizes immediate locking of an active screensaver that this worker supervises. The selective installer supports this flag with `--asset-config PATH --approved` and without `--download-images`; the combined runner uses `--enable-lock-rotation`.
+For custom paths, `--image DESKTOP --images LOCK1 LOCK2 LOCK3 --approved` can replace `--asset-config`. Supply three to eight lock paths. All files, including the separate desktop image, must decode as static images and represent distinct files, including no hard-link duplicates. Live installation requires `--force-lock-on-activation`, which authorizes immediate locking of an active screensaver that this worker supervises. The selective installer supports this flag with `--asset-config PATH --approved` and without `--download-images`; the combined runner uses `--enable-lock-rotation`.
 
 Python handles setup and restoration. Setup compiles [lockscreen-worker.c](src/lockscreen-worker.c) and [lockscreen-native.c](src/lockscreen-native.c) before stopping an existing managed service, installs the executables under `$XDG_DATA_HOME/ina/lockscreen`, writes `$XDG_CONFIG_HOME/ina/lockscreen-service.json`, and enables/starts `$XDG_CONFIG_HOME/systemd/user/ina-lockscreen.service`. It refuses unowned active/enabled services or units and externally changed owned files. Reapplication retains the original backups and validated cycle position, retires an older owned Python worker, and updates the service. Source: [setup](scripts/lib/components/lockscreen.py).
 
 The C worker monitors Cinnamon's session-bus screensaver state. If no screensaver owns the bus name, it starts the distribution screensaver and supervises that child. Rotation is permitted only when the bus owner PID is that live child, locking is enabled, lockdown permits locking, and the session passes its live/guest/passwordless-login checks. It deliberately calls `Lock`, verifies the owner and active state, then selects the next image. It never takes over, terminates, or restarts an already running screensaver. Consequently an existing unrelated screensaver can leave the service running without rotation until that screensaver exits naturally. Source: [worker](src/lockscreen-worker.c).
 
-The cycle is `lock-1`, `lock-2`, `lock-3`, then repeat. Default dwell is 300 seconds while locked; `--lock-image-seconds 10..3600` changes it on the direct lockscreen command. `$XDG_STATE_HOME/ina/lock-rotation-live.json` stores a private ownership token and the next zero-based index. The next lock continues from that saved position. Invalid or externally changed state is refused. An exclusive private lock file prevents competing workers. Source: [worker](src/lockscreen-worker.c).
+The worker visits each configured image in order, then returns to the first. Existing three-image configurations continue to work. To expand a managed installation, repeat image preparation and reapply live setup with the updated `assets.json`. Include your existing `--lock-image-seconds` value when reapplying. Default dwell is 300 seconds while locked; `--lock-image-seconds 10..3600` changes it on the direct lockscreen command. `$XDG_STATE_HOME/ina/lock-rotation-live.json` stores a private ownership token and the next zero-based index. The next lock continues from that saved position. Invalid or externally changed state is refused. An exclusive private lock file prevents competing workers. Source: [worker](src/lockscreen-worker.c).
 
 GTK animates Cinnamon's existing wallpaper image using [lockscreen-motion.css](dotfiles/lockscreen-motion.css): a 24-second alternating pan/zoom with 360 transform steps per leg, at most 15 new transform values per second. This does not change GTK's global frame clock. Cinnamon supplies crossfades between still images. No video decoder, replacement lock window, authentication, or input handling is added. GTK animations must be enabled. An already running locker loads the CSS on its next natural process start; setup never restarts it.
 
@@ -165,6 +172,8 @@ This builds `image-check`, `lockscreen-native`, `lockscreen-worker`, and `widget
 bash Ina/scripts/grub.sh --dry-run --download-images --approved
 bash Ina/scripts/grub.sh --apply --allow-boot-change --download-images --approved
 ```
+
+A fresh installation needs all eight image URLs to work. ArtStation returned HTTP 403 during the November 22 download check. If you already have the three original images, pass their configuration with `--asset-config PATH` during preparation. The downloader keeps those paths and fetches the five additions. See the [download script](scripts/lockscreen.sh).
 
 Preparation writes `$XDG_DATA_HOME/ina/grub`, defaulting to `~/.local/share/ina/grub`. It does not run sudo or alter boot files. Use `--image /absolute/background.jpg --approved` for a local JPEG, or `--asset-config PATH` with a separate `grub_image`; the desktop field is not a fallback. The prepared baseline JPEG is normalized locally when necessary, without changing the original input. Source: [GRUB component](scripts/grub.sh).
 

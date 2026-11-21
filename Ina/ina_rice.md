@@ -39,7 +39,7 @@ Repository identity and optional GitHub SSH setup are separate. Follow the [Git 
 
 ## Preview and apply
 
-For a first installation, obtain and approve a static desktop image independently, and save it to an existing local file before running the commands below. The repository supplies no desktop image, and the lock-image downloader does not choose or download one for you. It must be separate from all three lock images. Replace `$HOME/Pictures/CHOSEN-INA-IMAGE.jpg` below with its actual absolute path.
+For a first installation, obtain and approve a static desktop image independently, and save it to an existing local file before running the commands below. The repository supplies no desktop image, and the lock-image downloader does not choose or download one for you. It must be separate from all lock images. Replace `$HOME/Pictures/CHOSEN-INA-IMAGE.jpg` below with its actual absolute path.
 
 Also choose your actual VS Code settings file and an existing Firefox profile. Close Firefox before application. The package setup above does not install either application by default. If you want to omit one, replace its path option with `--skip-vscode` or `--skip-firefox` in both commands. The image and profile names below are placeholders; replace them before previewing:
 
@@ -97,7 +97,7 @@ If the selected configuration does not record approval, supply `--approved`. Use
 
 ## Live lock-screen motion
 
-Add `--enable-lock-rotation` to the full preview and application commands to install and enable `ina-lockscreen.service`. It compiles native helpers, uses GTK pan and zoom motion, and cycles exactly three ordered images while locked. The desktop image stays static and is restored on unlock or service exit. An active supervised Cinnamon screensaver is explicitly locked immediately. The runner does not restart an existing locker; GTK styling loads on its next natural process start. Source: [lock implementation](scripts/lib/components/lockscreen.py).
+Add `--enable-lock-rotation` to the full preview and application commands to install and enable `ina-lockscreen.service`. It compiles native helpers, uses GTK pan and zoom motion, and cycles the three to eight configured images in order while locked. The desktop image stays static and is restored on unlock or service exit. An active supervised Cinnamon screensaver is explicitly locked immediately. The runner does not restart an existing locker; GTK styling loads on its next natural process start. Source: [lock implementation](scripts/lib/components/lockscreen.py).
 
 The default interval is 300 seconds. The live configuration used for this setup cycles images every 10 seconds; select that interval with the component command after image preparation:
 
