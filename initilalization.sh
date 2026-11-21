@@ -31,7 +31,7 @@ groups may be repeated:
   gaming      power-profiles-daemon
   images      ImageMagick for optional GRUB image conversion
   test        Xephyr, D-Bus X11 support, and GTK 3
-  native      build tools for the optional native helper
+  native      build tools for Ina workers (already included by default)
   checks      ShellCheck and the optional GUI/GRUB test tools
 
 Preview uses the existing local APT cache, which may be stale. Apply makes no
@@ -46,7 +46,7 @@ HELP
 fail() { printf 'Error: %s\n' "$*" >&2; exit 1; }
 mode=dry
 mode_set=false
-packages=(bash coreutils diffutils util-linux mawk sed grep jq libglib2.0-bin python3 python3-gi python3-xapp gir1.2-gdkpixbuf-2.0 gir1.2-gtk-3.0 dbus-user-session wget imagemagick mint-y-icons mint-themes dmz-cursor-theme nemo)
+packages=(bash coreutils diffutils util-linux mawk sed grep jq build-essential libjson-glib-1.0-0 libglib2.0-bin python3 python3-gi python3-xapp gir1.2-gdkpixbuf-2.0 gir1.2-gtk-3.0 dbus-user-session wget imagemagick mint-y-icons mint-themes dmz-cursor-theme nemo)
 groups=()
 choose_exa=false
 choose_speedtest=false
