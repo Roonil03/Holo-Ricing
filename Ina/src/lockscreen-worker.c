@@ -598,13 +598,15 @@ static int supervise(const struct Config *c, int lock_fd, int index)
     if (w.failed) result = 0;
 done:
     if (check_id) source_remove(check_id);
-    if (term_id) source_remove(term_id);
-    if (interrupt_id) source_remove(interrupt_id);
     if (active_id) bus_unsubscribe(w.bus, active_id);
     if (owner_id) bus_unsubscribe(w.bus, owner_id);
     if (!restore(&w)) result = 0;
     close(w.input); close(w.output);
     if (!wait_child(w.helper, 5)) { fputs("Native wallpaper helper failed; external wallpaper edits were preserved\n", stderr); result = 0; }
+    /* GLib resets the disposition when the last signal source is removed.
+     * Keep its handlers installed until restoration and helper cleanup finish. */
+    if (term_id) source_remove(term_id);
+    if (interrupt_id) source_remove(interrupt_id);
     /* Never quit or kill the inherited Cinnamon screensaver. */
     if (w.bus) unref(w.bus);
     if (w.screensaver) unref(w.screensaver);
