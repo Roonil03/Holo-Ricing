@@ -11,9 +11,13 @@ ina_path() {
     local candidate="$1" current
     [[ "$candidate" == /* && "$candidate" != *$'\n'* ]] || ina_error "Expected an absolute single-line path: $candidate"
     current="$candidate"
-    while [[ "$current" != / ]]; do
+    # Walk the spelling supplied by the caller before realpath resolves "..".
+    # Strip trailing separators first so a symlink to a directory is visible.
+    while [[ -n "$current" ]]; do
+        while [[ "$current" == */ ]]; do current="${current%/}"; done
+        [[ -n "$current" ]] || break
         [[ ! -L "$current" ]] || ina_error "Refusing symbolic link: $current"
-        current="$(dirname -- "$current")"
+        current="${current%/*}"
     done
     realpath -m -- "$candidate"
 }
