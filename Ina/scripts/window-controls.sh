@@ -28,6 +28,23 @@ css="$(cat <<EOF
 @define-color wm_bg_unfocused $INA_ABYSS;
 headerbar { background-image: none; background-color: $INA_DEEP_VIOLET; color: $INA_ANCIENT_PARCHMENT; border-color: $INA_ELDRITCH_TEAL; }
 headerbar:backdrop { background-color: $INA_ABYSS; color: $INA_MUTED_TEXT; border-color: $INA_TENTACLE_PURPLE; }
+/* Muffin renders symbolic controls through GTK, independently of the XML above.
+ * Limit this to the headerbars made dark here; keep light custom titlebars intact.
+ * Restore uses the maximize button class. */
+headerbar button.titlebutton.minimize:not(:disabled),
+headerbar button.titlebutton.maximize:not(:disabled) {
+    color: $INA_ANCIENT_PARCHMENT;
+}
+headerbar button.titlebutton.minimize:not(:disabled):hover,
+headerbar button.titlebutton.maximize:not(:disabled):hover {
+    color: $INA_ANCIENT_PARCHMENT;
+    background-image: -gtk-gradient(radial, center center, 0, center center, 0.5, to($INA_TENTACLE_PURPLE), to(transparent));
+}
+headerbar button.titlebutton.minimize:not(:disabled):active,
+headerbar button.titlebutton.maximize:not(:disabled):active {
+    color: $INA_ANCIENT_PARCHMENT;
+    background-image: -gtk-gradient(radial, center center, 0, center center, 0.5, to($INA_DEEP_VIOLET), to(transparent));
+}
 decoration { box-shadow: 0 3px 8px alpha($INA_INK, 0.35); }
 /* Ina window controls end */
 EOF

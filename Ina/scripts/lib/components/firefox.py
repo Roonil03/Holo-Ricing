@@ -143,6 +143,17 @@ def run(ctx):
 #urlbar-input, .urlbar-input, .tab-label {{ color: {p['ANCIENT_PARCHMENT']} !important; }}
 #urlbar-input::placeholder {{ color: {p['MUTED_TEXT']} !important; opacity: 1 !important; }}
 #urlbar[focused] > #urlbar-background, #urlbar[focused] > .urlbar-background {{ border-color: {p['ELDRITCH_TEAL']} !important; outline-color: {p['ELDRITCH_TEAL']} !important; }}
+/* Firefox draws its own titlebar controls; keep their symbolic icons and layout. */
+#navigator-toolbox .titlebar-button,
+#navigator-toolbox .titlebar-button > .toolbarbutton-icon {{
+  color: {p['ANCIENT_PARCHMENT']} !important;
+  fill: currentColor !important;
+  stroke: currentColor !important;
+}}
+#navigator-toolbox .titlebar-button > .toolbarbutton-icon {{ background-color: {p['ABYSS']} !important; }}
+#navigator-toolbox .titlebar-button:hover > .toolbarbutton-icon {{ background-color: {p['DEEP_VIOLET']} !important; }}
+#navigator-toolbox .titlebar-button:hover:active > .toolbarbutton-icon {{ background-color: {p['TENTACLE_PURPLE']} !important; }}
+#navigator-toolbox .titlebar-button:focus-visible > .toolbarbutton-icon {{ outline: 2px solid {p['ELDRITCH_TEAL']} !important; }}
 /* Ina chrome end */
 '''
         ctx.file(chrome, original_css.rstrip('\n') + '\n' + added_css)
