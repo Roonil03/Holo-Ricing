@@ -227,7 +227,7 @@ Only --install-grub activates GRUB using the privileged helper.
 Sudo invocation: sudo --preserve-env=DISPLAY,XAUTHORITY,DBUS_SESSION_BUS_ADDRESS,XDG_RUNTIME_DIR,XDG_SESSION_TYPE,XDG_CURRENT_DESKTOP,XDG_CONFIG_HOME,XDG_DATA_HOME,XDG_STATE_HOME bash Ina/ina_rice.sh [options]
 Restore boot files: sudo bash Ina/ina_rice.sh --restore-grub --apply
 User backups: scripts/restore.sh --component NAME --apply
-Use --enable-lock-rotation to lock active screensavers and rotate three images.
+Use --enable-lock-rotation to lock active screensavers and rotate the ordered lock playlist.
 Legacy installers and cursor-toggle.sh are excluded. No packages or restarts run.
 Gaming mode runs only a command explicitly supplied after -- and restores on exit.
 Runtime application, repeat runs, rollback and boot recovery are [unverified].
@@ -424,7 +424,7 @@ try:
               text(assets.get('grub_image', '')), code, profile,
               'true' if assets.get('approved') is True else 'false',
               'true' if assets.get('force_lock_on_activation') is True or lockscreen.get('service_managed') is True else 'false',
-              'true' if isinstance(assets.get('lock_images'), list) and len(assets['lock_images']) == 3 and all(isinstance(p, str) and p for p in assets['lock_images']) else 'false']
+              'true' if isinstance(assets.get('lock_images'), list) and 3 <= len(assets['lock_images']) <= 8 and all(isinstance(p, str) and p for p in assets['lock_images']) else 'false']
     for value in values:
         print(value)
 except (OSError, ValueError, KeyError, TypeError, configparser.Error) as exc:
@@ -453,7 +453,7 @@ if "$apply"; then
         fail 'Downloading the configured GRUB source requires explicit --approved, or select an approved grub_image in the asset configuration'
     fi
     if ! "$grub_only" && ! "$local_lock_images" && ! "$approved_explicit"; then
-        fail 'Preparing missing lock images requires explicit --approved, or select three previously approved lock_images'
+        fail 'Preparing missing lock images requires explicit --approved, or select 3 to 8 previously approved lock_images'
     fi
     if ! "$grub_only"; then
         [[ -n "$image" && -f "$image" ]] || fail 'Select an existing independent --desktop-image PATH'
@@ -513,7 +513,7 @@ for component in "${selected[@]}"; do
     printf 'Previewing %s\n' "$component"
     bash "$SCRIPTS/$component.sh" "${args[@]}" --dry-run
 done
-if "$enable_lock"; then printf '%s\n' 'Live lock rotation selected: active screensavers will be explicitly locked. Three images rotate every 300 seconds.'; fi
+if "$enable_lock"; then printf '%s\n' 'Live lock rotation selected: active screensavers will be explicitly locked. The configured playlist rotates every 300 seconds.'; fi
 if "$apply"; then
     for component in "${selected[@]}"; do
         args_for "$component"

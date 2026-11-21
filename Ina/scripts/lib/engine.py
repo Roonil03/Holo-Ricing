@@ -264,6 +264,14 @@ def block_pattern(marker):
     return r'\n?/\* ' + re.escape(marker) + r' begin \*/.*?/\* ' + re.escape(marker) + r' end \*/\n?'
 
 
+def live_rotation_count(manifest):
+    # Backups created before playlists were configurable always held three images.
+    count = manifest.get('live_rotation', {}).get('image_count', 3)
+    if type(count) is not int or not 3 <= count <= 8:
+        raise Error('Invalid live rotation playlist size in backup.')
+    return count
+
+
 def live_rotation_restore(ctx, manifest):
     details = manifest.get('live_rotation')
     if not details:
@@ -283,7 +291,7 @@ def live_rotation_restore(ctx, manifest):
         state = json.loads(current)
         if (not isinstance(state, dict) or set(state) != {'token', 'next_index'} or
                 state['token'] != details['token'] or type(state['next_index']) is not int or
-                not 0 <= state['next_index'] < 3):
+                not 0 <= state['next_index'] < live_rotation_count(manifest)):
             raise Error('Live rotation state changed outside Ina; preserve it before restoring.')
     return path, original, mode
 
@@ -379,7 +387,7 @@ def parser():
     p.add_argument('--profile')
     p.add_argument('--user-chrome', action='store_true')
     p.add_argument('--image')
-    p.add_argument('--images', nargs=3)
+    p.add_argument('--images', nargs='+', metavar='PATH', help='3 to 8 ordered lock images (legacy three-image configurations are supported)')
     p.add_argument('--asset-config')
     p.add_argument('--simulate-events', nargs='+', choices=['locked', 'tick', 'unlocked', 'lost-session', 'exit'])
     p.add_argument('--approved', action='store_true')
@@ -407,8 +415,8 @@ def main():
         assets = json.loads(asset_path.read_text())
         args.image = args.image or assets.get('desktop_image')
         args.images = args.images or assets.get('lock_images')
-        if args.images and len(args.images) != 3:
-            raise Error('Asset configuration must specify exactly three lock image paths.')
+        if args.images is not None and (not isinstance(args.images, list) or not 3 <= len(args.images) <= 8):
+            raise Error('Asset configuration must specify 3 to 8 ordered lock image paths.')
         # Approval requires the explicit command-line flag, not a file field.
     ctx = Context(args)
     if args.component == 'restore':

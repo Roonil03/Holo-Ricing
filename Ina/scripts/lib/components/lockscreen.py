@@ -9,7 +9,7 @@ import sys
 import subprocess
 import tempfile
 from pathlib import Path
-from engine import Error, atomic, block_pattern, reject_links
+from engine import Error, atomic, block_pattern, reject_links, live_rotation_count
 
 DESKTOP = True
 SOURCES = Path(__file__).resolve().parents[3] / 'dotfiles' / 'image-sources.json'
@@ -42,7 +42,7 @@ class Rotation:
         self.ctx, self.images, self.desktop = ctx, images, desktop
         self.state = reject_links(ctx.state / 'lock-rotation.json')
         self.index = json.loads(self.state.read_text())['next_index'] if self.state.exists() else 0
-        if type(self.index) is not int or not 0 <= self.index < 3:
+        if type(self.index) is not int or not 0 <= self.index < len(self.images):
             raise Error('Invalid lock rotation state; preserve it and restore wallpaper manually.')
         self.locked = False
 
@@ -62,7 +62,7 @@ class Rotation:
 
     def advance(self):
         self.ctx.setting('org.cinnamon.desktop.background', 'picture-uri', self.images[self.index].as_uri())
-        self.index = (self.index + 1) % 3
+        self.index = (self.index + 1) % len(self.images)
         if not self.ctx.dry:
             if 'rotation_original' not in self.ctx.manifest:
                 self.ctx.manifest['rotation_original'] = self.state.read_text() if self.state.exists() else None
@@ -203,7 +203,7 @@ def install_service(ctx, images, desktop):
         initialize_state = current == original
         if not initialize_state:
             data = json.loads(current)
-            if set(data) != {'token', 'next_index'} or data['token'] != token or type(data['next_index']) is not int or not 0 <= data['next_index'] < 3:
+            if not isinstance(data, dict) or set(data) != {'token', 'next_index'} or data['token'] != token or type(data['next_index']) is not int or not 0 <= data['next_index'] < live_rotation_count(ctx.manifest):
                 raise Error('Rotation state changed externally.')
     text = json.dumps({'mode': 'motion-cycle', 'image_interval': getattr(ctx.args, 'lock_image_seconds', 300),
                        'native_helper': str(native), 'desktop_image': str(desktop), 'lock_images': [str(p) for p in images],
@@ -256,6 +256,27 @@ def install_service(ctx, images, desktop):
             ctx.run_files[state] = (original, initial, mode)
             ctx.save()
             atomic(state, initial, 0o600)
+        # The worker is stopped now: validate its final state before changing the
+        # playlist. Keep the original backup/token when upgrading legacy installs.
+        if not ctx.dry and not initialize_state:
+            current = state.read_bytes()
+            data = json.loads(current)
+            if (not isinstance(data, dict) or set(data) != {'token', 'next_index'} or
+                    data['token'] != token or type(data['next_index']) is not int or
+                    not 0 <= data['next_index'] < live_rotation_count(ctx.manifest)):
+                raise Error('Rotation state changed externally.')
+            updated = current
+            if data['next_index'] >= len(images):
+                data['next_index'] %= len(images)
+                updated = json.dumps(data).encode()
+            # A replacement worker can advance beyond the previous playlist
+            # before startup fails. Roll its state back with the previous config.
+            ctx.run_files[state] = (current, updated, stat.S_IMODE(state.stat().st_mode))
+            if updated != current:
+                atomic(state, updated, 0o600)
+        if not ctx.dry:
+            ctx.manifest['live_rotation']['image_count'] = len(images)
+            ctx.save()
         ctx.file(lock_path, b'', 0o600)
         ctx.file(worker, worker_binary, 0o700)
         ctx.file(native, binary, 0o700)
@@ -283,7 +304,7 @@ def install_service(ctx, images, desktop):
             if state in ctx.run_files and state.exists():
                 current = state.read_bytes()
                 data = json.loads(current)
-                if set(data) == {'token', 'next_index'} and data['token'] == token and type(data['next_index']) is int and 0 <= data['next_index'] < 3:
+                if isinstance(data, dict) and set(data) == {'token', 'next_index'} and data['token'] == token and type(data['next_index']) is int and 0 <= data['next_index'] < len(images):
                     original, _, mode = ctx.run_files[state]
                     ctx.run_files[state] = (original, current, mode)
         raise
@@ -298,28 +319,28 @@ def run(ctx):
         raise Error('Lock image interval must be from 10 to 3600 seconds.')
     sources = json.loads(SOURCES.read_text())['images']
     lock_sources = [item for item in sources if item['role'].startswith('lock-')]
-    if [item['role'] for item in lock_sources] != ['lock-1', 'lock-2', 'lock-3']:
-        raise Error('Expected exactly three ordered lock image source records.')
+    if [item['role'] for item in lock_sources] != [f'lock-{index}' for index in range(1, 9)]:
+        raise Error('Expected exactly eight ordered lock image source records.')
     for item in lock_sources:
         print(f"Selected {item['role']}: {item['url']}")
         print(f"Local download name: {item['filename']}")
     print('Live mode explicitly locks each supervised Cinnamon screensaver before selecting the lock wallpaper.')
-    print('GTK pans and zooms the current lock image. The native helper cycles the three approved images only while locked.')
+    print('GTK pans and zooms the current lock image. The native helper cycles the approved playlist in order only while locked.')
     if not ctx.args.images or not ctx.args.image:
-        print('Required paths: exactly three approved lock images and one approved static desktop image.')
+        print('Required paths: 3 to 8 ordered approved lock images and one approved static desktop image.')
         if not ctx.dry:
             raise Error('Required approved image paths are empty.')
         return
     validate = approved_image
-    if not isinstance(ctx.args.images, list) or len(ctx.args.images) != 3 or not all(isinstance(path, str) and path for path in ctx.args.images):
-        raise Error('Supply exactly three lock image paths.')
+    if not isinstance(ctx.args.images, list) or not 3 <= len(ctx.args.images) <= 8 or not all(isinstance(path, str) and path for path in ctx.args.images):
+        raise Error('Supply 3 to 8 ordered lock image paths.')
     if not isinstance(ctx.args.image, str):
         raise Error('Supply a desktop image path.')
     desktop = validate(ctx.args.image, ctx.args.approved)
     images = [validate(path, ctx.args.approved) for path in ctx.args.images]
     identities = [(path.stat().st_dev, path.stat().st_ino) for path in images]
-    if len(set(identities)) != 3:
-        raise Error('Supply exactly three distinct lock images, including no hard-link duplicates.')
+    if len(set(identities)) != len(images):
+        raise Error('Supply distinct lock images, including no hard-link duplicates.')
     if (desktop.stat().st_dev, desktop.stat().st_ino) in identities:
         raise Error('The static desktop image must be independent of the lock images.')
     for index, path in enumerate(images, 1):

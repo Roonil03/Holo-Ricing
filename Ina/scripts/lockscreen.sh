@@ -44,7 +44,7 @@ for argument in "$@"; do
                 'Live setup: --asset-config PATH --approved --force-lock-on-activation --apply --apply-desktop.' \
                 'Lock now with an extended reply timeout: --lock-now [--dry-run]. Unlock normally.' \
                 'This locks the supervised Cinnamon screensaver immediately whenever it becomes active.' \
-                'GTK pans and zooms each of the three approved images. The desktop stays static.' \
+                'GTK pans and zooms each approved image in playlist order. The desktop stays static.' \
                 'Optional: --lock-image-seconds 10..3600. The default is 300 seconds.' \
                 'Requires Cinnamon on X11 and GTK animations enabled. Video is not decoded.' \
                 'Use --test-root PATH for isolated simulation.' \
@@ -60,29 +60,50 @@ source "$SCRIPT_DIR/lib/shell-common.sh"
 source "$SCRIPT_DIR/lib/images.sh"
 ina_init lockscreen-images "$@"
 if ! "$INA_DRY"; then "$INA_APPROVED" || ina_error 'Image downloads require --apply --approved'; fi
-jq -e '[.images[] | select(.role | startswith("lock-")) | .role] == ["lock-1", "lock-2", "lock-3"]' \
-    "$SCRIPT_DIR/../dotfiles/image-sources.json" >/dev/null || ina_error 'Expected exactly three ordered lock sources'
+jq -e '[.images[] | select(.role | startswith("lock-")) | .role] == [range(1; 9) | "lock-\(.)"]' \
+    "$SCRIPT_DIR/../dotfiles/image-sources.json" >/dev/null || ina_error 'Expected exactly eight ordered lock sources'
 prepared="$INA_DATA/ina/lockscreen"
-# Keep the desktop selection when repeating image preparation without --image.
-if [[ -z "$INA_IMAGE" && -f "$prepared/assets.json" ]]; then
-    ina_path "$prepared/assets.json" >/dev/null
-    INA_IMAGE="$(jq -er '.desktop_image | select(type == "string")' "$prepared/assets.json")" || ina_error 'Invalid existing image configuration'
+# Preserve an explicit selection or the previous prepared playlist. Upgrades
+# append the new sources; custom paths and the independent desktop stay selected.
+existing="$INA_ASSETS"
+if [[ -z "$existing" && -f "$prepared/assets.json" ]]; then existing="$prepared/assets.json"; fi
+configuration='{}'
+images=()
+if [[ -n "$existing" ]]; then
+    existing="$(ina_path "$existing")"
+    configuration="$(cat -- "$existing")"
+    jq -e 'type == "object" and ((.desktop_image // "") | type == "string") and
+        (.lock_images | type == "array" and length >= 3 and length <= 8 and
+        all(.[]; type == "string" and length > 0 and (contains("\n") | not)))' \
+        <<< "$configuration" >/dev/null || ina_error 'Existing configuration requires 3 to 8 ordered lock paths'
+    [[ -n "$INA_IMAGE" ]] || INA_IMAGE="$(jq -r '.desktop_image // ""' <<< "$configuration")"
+    mapfile -t images < <(jq -r '.lock_images[]' <<< "$configuration")
 fi
 ina_begin
-images=()
-for number in 1 2 3; do
+for number in {1..8}; do
+    index=$((number - 1))
     ina_image_source "lock-$number"
     image="$prepared/lock-$number.jpg"
+    if ((index < ${#images[@]})); then
+        selected="$(ina_path "${images[index]}")"
+        if [[ "$selected" != "$image" ]]; then
+            # Existing approved local selections are inputs, never download destinations.
+            ina_check_image "$selected" || ina_error "Existing lock image could not be decoded: $selected"
+            printf 'Retained lock image %s: %s\n' "$number" "$selected"
+            continue
+        fi
+    fi
     ina_download_image "$image"
-    images+=("$image")
+    images[index]="$image"
 done
-configuration="$(jq -n --arg desktop "$INA_IMAGE" --arg a "${images[0]}" --arg b "${images[1]}" --arg c "${images[2]}" \
-    '{desktop_image:$desktop,lock_images:[$a,$b,$c],login_image:"",approved:false}')"
+playlist="$(printf '%s\n' "${images[@]}" | jq -R . | jq -s .)"
+configuration="$(jq --arg desktop "$INA_IMAGE" --argjson images "$playlist" \
+    '.desktop_image=$desktop | .lock_images=$images | .login_image=(.login_image // "") | .approved=false' <<< "$configuration")"
 ina_text "$prepared/assets.json" "$configuration"$'\n' 600
 printf 'Image configuration: %s\n' "$prepared/assets.json"
-if "$INA_DRY"; then printf '%s\n' 'Preview only. Three images would be prepared in the selected order.'
-else printf '%s\n' 'Three images prepared in the selected order.'; fi
-printf '%s\n' 'Live motion cycles the three selected images while locked.' \
+if "$INA_DRY"; then printf '%s\n' 'Preview only. Eight images would be prepared in the selected order.'
+else printf '%s\n' 'Eight images prepared in the selected order.'; fi
+printf '%s\n' 'Live motion cycles the selected playlist in order while locked.' \
     'Select an independent static desktop image in assets.json before enabling motion.' \
     'Live setup requires --force-lock-on-activation and locks each supervised Cinnamon screensaver.' \
     'No wallpaper, login-screen setting, service, or boot file was changed.'
