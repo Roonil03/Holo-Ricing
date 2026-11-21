@@ -1,20 +1,32 @@
 # Ina configuration
 
-The new Ina commands preview by default. Apply only the components you select. Run these commands from the repository root as your desktop user. Implementation sources are linked below.
+Ina configures a purple and parchment Cinnamon desktop using the palette in [colors.sh](dotfiles/colors.sh). Run examples from the repository root. The component scripts preview by default; the [combined runner](ina_rice.md) documents `ina.sh`, which applies by default unless `--dry-run` is present.
 
 ## Environment and dependencies
 
-The target is Linux Mint 22.3, Cinnamon 6.6.9, and X11. The Bash conversion has not been run; compatibility and runtime behavior remain [unverified]. The recorded `gTile@shuairan` extension remains unchanged. Real desktop application checks the release, Cinnamon version, and session. Other environments are refused. Sources: [Bash implementation](scripts/lib/shell-common.sh) and [retained Python implementation](scripts/lib/engine.py). Mint's [release documentation](https://www.linuxmint.com/rel_zena_whatsnew.php) documents Cinnamon 6.6 for Mint 22.3.
+Live desktop application requires Linux Mint 22.3, Cinnamon 6.6.9, and a Cinnamon X11 session. Components check these values and refuse other environments. Run component scripts as the desktop user. The combined runner can route a sudo invocation back to that user and has a separate privileged GRUB helper. No component installs packages or restarts the desktop or computer. Sources: [Bash helpers](scripts/lib/shell-common.sh), [Python engine](scripts/lib/engine.py), and [runner](ina_rice.sh).
 
-Icons, cursor, window controls, widgets, taskbar, Nemo, animations, wallpaper, GRUB, lock-image preparation, gaming mode, installation, and restoration now use Bash. They require `jq` [a tool for reading and changing JSON], GNU coreutils, util-linux (`flock` and gaming mode's `setsid`), awk, sed, grep, and `gsettings` for desktop preferences. VS Code, Firefox, the disabled lock-rotation model, and older backup recovery retain Python 3; the Python settings code also requires `python3-gi`. Bash path arguments require absolute paths. GRUB and lock-image downloads additionally require `wget`, `timeout`, `head`, `od`, and `df`. Array settings with unsupported escaping are refused. Missing commands cause errors. Install dependencies yourself. No package manager runs automatically. Sources: [Bash helpers](scripts/lib/shell-common.sh), [Python entry point](scripts/lib/common.sh), and [retained engine](scripts/lib/engine.py).
+Required tools depend on the selected component:
 
-Theme components require installed `mint-y-icons`, `mint-themes`, or `dmz-cursor-theme`. Optional gaming power profiles require `powerprofilesctl` and an available chosen profile. VS Code and Firefox must already be installed. No editor extension, browser extension, font, or cursor generator is installed. Sources: [icons](scripts/icons.sh), [cursor](scripts/cursor.sh), [window controls](scripts/window-controls.sh), and [gaming mode](scripts/gaming-mode.sh).
+| Use | Dependencies |
+| --- | --- |
+| Bash components and restore | Bash, `jq`, GNU coreutils, util-linux `flock`, `awk`, `sed`, `grep`; desktop settings also need `gsettings` and installed Cinnamon schemas. |
+| VS Code, Firefox, lockscreen setup, older backup recovery, combined runner selection | Python 3. Settings validation and lock image decoding need `python3-gi`, GLib/GIO, and GdkPixbuf introspection. VS Code and Firefox are configured through their selected user files. |
+| Icons, windows, cursor, taskbar | Installed `mint-y-icons`, `mint-themes`, or `dmz-cursor-theme` as appropriate. Theme scripts check their installed files and available license notices. |
+| Native builds and live lock setup | `cc` with C11 support and the system linker. Helpers dynamically load runtime libraries, so their build does not require GTK/GIO development headers or `pkg-config`. |
+| Image decoding | GdkPixbuf runtime `libgdk_pixbuf-2.0.so.0`; absent a matching installed native image checker, Bash falls back to Python GI decoding. |
+| System widget placement | GTK 3 GDK runtime `libgdk-3.so.0` and access to the desktop display. Application builds a temporary helper if a matching installed one is absent. |
+| Native lock service | systemd user manager, GLib/GIO `libgio-2.0.so.0`, JSON-GLib `libjson-glib-1.0.so.0`, GdkPixbuf, and the distribution Cinnamon screensaver. GTK animations must be enabled for motion. `gdbus` is needed by `--lock-now`. |
+| Image downloads and GRUB preparation | `wget`, `timeout`, `head`, `od`, `df`; GRUB application also needs ImageMagick `convert` to decode and normalize progressive JPEGs into baseline JPEGs. |
+| GRUB activation through the runner | `sudo`, `update-grub`, and `grub-script-check`, plus a working `/boot/grub/grub.cfg`. |
+| Gaming mode | util-linux `setsid`, `sleep`, `kill`, and the selected game command. Optional power profiles need `powerprofilesctl` and an available selected profile. |
+| Updating an already installed vendored widget | `gdbus` for Cinnamon's `ReloadXlet` method when its source or schema changes. |
 
-Tests require Python 3 and the target schemas. The isolated Cinnamon check also requires `Xephyr`, `dbus-run-session`, `cinnamon`, `timeout`, GTK 3, and an active X11 display. ShellCheck was not installed during the recorded checks. Source: [historical startup check](https://github.com/Roonil03/Holo-Ricing/blob/303e5d78dc515395c264af554a7f1fd955e11da7/Ina/tests/check_cinnamon.py).
+Sources: [Bash helpers](scripts/lib/shell-common.sh), [native build script](scripts/build-native.sh), [image helper](scripts/lib/images.sh), [position helper](scripts/lib/widget-position.sh), [lock setup](scripts/lib/components/lockscreen.py), and [native sources](src).
+
+Bash component path arguments must be absolute, single-line paths. Configuration, data, and state destinations must be beneath the user's home directory. Symbolic links and ambiguous array escaping are refused. The combined runner resolves relative input paths from the `Ina` directory, independently of the current working directory. No fonts, browser extensions, editor extensions, or cursor generators are installed.
 
 ## Palette
-
-Custom colours come from [colors.sh](dotfiles/colors.sh). The installer writes configuration text and does not generate artwork.
 
 | Name | Value |
 | --- | --- |
@@ -31,76 +43,155 @@ Custom colours come from [colors.sh](dotfiles/colors.sh). The installer writes c
 
 ## Component commands
 
-Each entry accepts `--dry-run`. Omit `--apply` to preview. Live desktop changes also require `--apply-desktop`. Editing selected Firefox or VS Code files does not require that flag. Sources: [Bash argument handling](scripts/lib/shell-common.sh) and [Python argument handling](scripts/lib/engine.py).
+Omitting `--apply` previews a component. An explicit `--dry-run` takes precedence over `--apply`. Desktop application also requires `--apply-desktop`; Firefox and VS Code file edits do not require it. A preview can read settings, inspect files, and decode selected images, but does not download images, compile helpers, create backups, enable services, launch a game, or write configuration. Source: [argument handling](scripts/lib/shell-common.sh) and [Python engine](scripts/lib/engine.py).
 
-| Component and source | Preview | Application and limits |
+| Component | Preview | Application and behavior |
 | --- | --- | --- |
-| [Icons](scripts/icons.sh) | `bash Ina/scripts/icons.sh --dry-run` | Add `--apply --apply-desktop`. Enable installed Mint-Y-Purple after its license check. No download. |
-| [Window controls](scripts/window-controls.sh) | `bash Ina/scripts/window-controls.sh --dry-run` | Add `--apply --apply-desktop`. Reuse necessary licensed Mint window files and artwork in a user theme. Set titlebar colours, readable states, borders, and GTK 3 shadows. |
-| [Widgets](scripts/widgets.sh) | `bash Ina/scripts/widgets.sh --dry-run --widgets clock calendar system` | Add `--apply --apply-desktop`. Install only selected widgets. Preserve other widgets and existing IDs. Media is unavailable. |
-| [VS Code](scripts/lib/components/vscode.py) | `bash Ina/scripts/vscode.sh --dry-run --settings "$HOME/.config/Code/User/settings.json"` | Add `--apply`. Select the actual user settings path. Preserve comments and unrelated keys. Refuse malformed input and duplicate keys. |
-| [Firefox](scripts/lib/components/firefox.py) | `bash Ina/scripts/firefox.sh --dry-run` | Lists detected profiles. Select `--profile PATH`, optionally add `--user-chrome`, and add `--apply` to write. Close the profile first. |
-| [Gaming mode](scripts/gaming-mode.sh) | `bash Ina/scripts/gaming-mode.sh --dry-run -- your-game` | Use `--apply --apply-desktop -- your-game`. Restore notifications and effects on exit. Optional `--power-profile balanced` changes an available profile. |
-| [Lock screen](scripts/lockscreen.sh) | `bash Ina/scripts/lockscreen.sh --download-images --dry-run` | Add `--apply --approved` to download the three selected JPEGs and prepare a local asset configuration. Live rotation remains unavailable. The ordered model is test-only; no service is installed or enabled. |
-| [Desktop wallpaper](scripts/wallpaper.sh) | `bash Ina/scripts/wallpaper.sh --dry-run --image PATH --approved` | Add `--apply --apply-desktop`. Require one approved local image. Disable slideshow and set a static wallpaper. |
-| [Cursor](scripts/cursor.sh) | `bash Ina/scripts/cursor.sh --dry-run` | Add `--apply --apply-desktop`. Enable installed DMZ-White at size 32 and back up user GTK and Xresources settings. Preserve login cursors. |
-| [Taskbar](scripts/taskbar.sh) | `bash Ina/scripts/taskbar.sh --dry-run` | Add `--apply --apply-desktop`. Bottom panel, 40 px, centered clock. Preserve custom applets, IDs, and other panels. The chosen Cinnamon theme also imports base menu styling. |
-| [Nemo](scripts/nemo.sh) | `bash Ina/scripts/nemo.sh --dry-run` | Add `--apply --apply-desktop`. Icon view, standard zoom, visible sidebar and toolbar, and Nemo-scoped palette CSS. Preserve folder metadata. |
-| [Animations](scripts/animations.sh) | `bash Ina/scripts/animations.sh --dry-run` | Add `--apply --apply-desktop`. Built-in fades and default speed. Disable menu, workspace, and resize effects. No blur or extensions. |
-| [GRUB](scripts/grub.sh) | `bash Ina/scripts/grub.sh --dry-run` | `--apply --allow-boot-change --download-images --approved` downloads the selected private-use JPEG and prepares user files. Alternatively select `--image PATH --approved`. Activation is manual. Test the printed recipe in a disposable environment first. |
-| [Installer](scripts/install.sh) | `bash Ina/scripts/install.sh --dry-run` | Use `--components NAME...`, then `--apply` and required flags. A terminal menu asks for selections when no names are supplied. Nothing is preselected. |
-| [Restore](scripts/restore.sh) | `bash Ina/scripts/restore.sh --component COMPONENT --dry-run` | Add `--apply` to restore that component. Without a name, list backups. Restore installer selections individually; the installer owns no configuration. |
+| [Icons](scripts/icons.sh) | `bash Ina/scripts/icons.sh --dry-run` | Add `--apply --apply-desktop`. Select installed Mint-Y-Purple after checking its installed license and source notice. |
+| [Window controls](scripts/window-controls.sh) | `bash Ina/scripts/window-controls.sh --dry-run` | Add `--apply --apply-desktop`. Recolour installed Mint-Y constants, copy the necessary SVGs and copyright notice into `Ina-Windows`, and put minimize, maximize, close on the right. Add GTK 3 headerbar colours and shadows. GTK 4 and application-drawn controls may ignore them. |
+| [Widgets](scripts/widgets.sh) | `bash Ina/scripts/widgets.sh --dry-run --widgets clock calendar system` | Add `--apply --apply-desktop`. Select the stock clock and vendored Calendar/System Monitor Graph. Preserve unrelated desklets and existing IDs. Retire this project's old music desklet. See details below. |
+| [VS Code](scripts/lib/components/vscode.py) | `bash Ina/scripts/vscode.sh --dry-run --settings "$HOME/.config/Code/User/settings.json"` | Add `--apply`. Merge palette and terminal colours, solid cursor, smooth scrolling, reduced workbench motion, and minimum terminal contrast 4.5. Retain comments, unrelated keys, font size, icon theme, and extensions. Malformed JSONC and duplicate keys are refused. |
+| [Firefox](scripts/lib/components/firefox.py) | `bash Ina/scripts/firefox.sh --dry-run` | List detected profiles. Select `--profile PATH`, optionally add `--user-chrome`, then add `--apply`. Close Firefox first. Write owned `user.js` preferences and optional toolbar CSS. Restart manually to load them. |
+| [Gaming mode](scripts/gaming-mode.sh) | `bash Ina/scripts/gaming-mode.sh --dry-run -- your-game` | Add `--apply --apply-desktop`. Suppress notifications and desktop/workspace effects during the supplied command. Restore on exit. Optional `--power-profile balanced` selects an available profile. |
+| [Lockscreen images](scripts/lockscreen.sh) | `bash Ina/scripts/lockscreen.sh --download-images --dry-run` | Add `--apply --approved`. Download exactly three selected JPEGs and write local `assets.json`. This preparation alone does not enable motion. |
+| [Live lock motion](scripts/lib/components/lockscreen.py) | `bash Ina/scripts/lockscreen.sh --dry-run --asset-config "$HOME/.local/share/ina/lockscreen/assets.json" --approved --force-lock-on-activation` | Add `--apply --apply-desktop`. Compile and install a managed C worker/helper and user service. Explicitly lock a supervised active screensaver, pan/zoom the wallpaper, cycle three images, and restore the independent desktop image on unlock. See limits below. |
+| [Desktop wallpaper](scripts/wallpaper.sh) | `bash Ina/scripts/wallpaper.sh --dry-run --image /absolute/image.png --approved` | Add `--apply --apply-desktop`. Decode an approved static image, disable slideshow, select it with zoom. No download. |
+| [Cursor](scripts/cursor.sh) | `bash Ina/scripts/cursor.sh --dry-run` | Add `--apply --apply-desktop`. Select DMZ-White size 32 through Cinnamon settings and user GTK 3 `settings.ini`. Preserve unrelated GTK settings; reject duplicate cursor keys or Settings sections. Reopen applications if needed. |
+| [Taskbar](scripts/taskbar.sh) | `bash Ina/scripts/taskbar.sh --dry-run` | Add `--apply --apply-desktop`. Move the first panel on monitor 0 to the bottom at 40 px. Put menu/window list left, calendar center, and standard status applets right. Preserve custom applets, existing IDs, other panels, and clock formatting. `Ina-Panel` imports the installed Mint-Y-Dark Cinnamon CSS, including base menu styling. |
+| [Nemo](scripts/nemo.sh) | `bash Ina/scripts/nemo.sh --dry-run` | Add `--apply --apply-desktop`. Icon view, standard zoom, normal spacing, places sidebar, toolbar, and location bar. Palette CSS includes focused/unfocused selections and excludes Nemo desktop windows. Folder metadata is untouched. |
+| [Animations](scripts/animations.sh) | `bash Ina/scripts/animations.sh --dry-run` | Add `--apply --apply-desktop`. Enable built-in window/dialog effects, fade opening/closing, traditional minimize, and default speed. Disable menu, workspace, and resize effects. |
+| [GRUB preparation](scripts/grub.sh) | `bash Ina/scripts/grub.sh --dry-run --download-images --approved` | Add `--apply --allow-boot-change`. Prepare user files only, normalize the background to baseline JPEG when necessary, and print manual activation/recovery commands. Use `--image PATH --approved` instead for a local JPEG. |
+| [Native helpers](scripts/build-native.sh) | `bash Ina/scripts/build-native.sh --dry-run` | Add `--apply` to build/install four helpers and their source hashes. No desktop opt-in needed. |
+| [Selective installer](scripts/install.sh) | `bash Ina/scripts/install.sh --dry-run --components icons taskbar widgets --widgets clock calendar` | Add `--apply --apply-desktop`. Preview every selected component before applying them in order. No default selection. Without names, an interactive terminal offers numbered choices unless explicit dry-run is requested. Each child owns its backup. |
+| [Restore](scripts/restore.sh) | `bash Ina/scripts/restore.sh --component taskbar --dry-run` | Add `--apply`. Without `--component`, list backup component names. Restore installer/runner selections individually. |
 
-Examples:
+The Firefox profile and image paths above are placeholders. Select actual existing paths. To select Firefox explicitly:
 
 ```bash
-bash Ina/scripts/install.sh --dry-run --components icons taskbar widgets --widgets clock calendar
-bash Ina/scripts/install.sh --apply --apply-desktop --components icons taskbar widgets --widgets clock calendar
 bash Ina/scripts/firefox.sh --dry-run --profile "$HOME/.mozilla/firefox/CHOSEN-PROFILE" --user-chrome
 bash Ina/scripts/firefox.sh --apply --profile "$HOME/.mozilla/firefox/CHOSEN-PROFILE" --user-chrome
 ```
 
-The profile example is a placeholder. Select your existing profile. Restart Firefox manually after application or restoration. GTK settings may require reopening applications [unverified]; Xresources cursor changes are intended for the next login [unverified]. Sources: [Firefox](scripts/lib/components/firefox.py) and [cursor](scripts/cursor.sh).
+Firefox checks legacy lock markers and an advisory lock on `.parentlock`; only a narrowly recognized stale local lock symlink is accepted. Flatpak and other installations require their explicit profile path. Firefox version compatibility remains [unverified].
 
-## Images and approval
+## Widgets
 
-[assets.example.json](dotfiles/assets.example.json) has one empty desktop path, exactly three empty lock paths, an empty optional GRUB path, and an empty optional login field. The login field is reserved and unused by the new installer. It provides no login-screen component. The older `login_screen.sh` remains excluded. Source: [installer](scripts/install.sh).
+Clock uses parchment text, size 36, and `%H:%M`; new clock/calendar instances start at `(30,30)` and `(30,140)`. Calendar uses the palette for text, background, Sundays, and Saturdays. System Monitor Graph uses a two-second refresh interval, parchment text, abyss background, deep violet midline, and teal graph lines. Existing non-colour preferences and Cinnamon's schema metadata are retained through value-specific backup records. Source: [widgets](scripts/widgets.sh) and [widget settings helper](scripts/lib/widget-settings.sh).
 
-Pass your local JSON file with `--asset-config PATH` to fill desktop and lock arguments. GRUB reads its separate `grub_image` field and does not use `desktop_image` as a fallback. Approval still requires the command-line `--approved` flag; the JSON `approved` field does not authorize changes. Sources: [Bash argument handling](scripts/lib/shell-common.sh) and [Python argument handling](scripts/lib/engine.py).
+The system widget is positioned in the primary monitor's upper-right work area with a panel-aware margin. Its `scale-size` and display scale determine the required space; application fails if geometry cannot be read or the widget does not fit. Existing instance IDs are retained and coordinates are updated. An unbuilt preview reports unresolved geometry instead of inventing a position. `build-native.sh --apply` installs the helper needed to resolve placement during subsequent previews. Source: [position helper](scripts/lib/widget-position.sh).
 
-Use approved static images without flashing content. The check verifies readability and the image header, not ownership, full decoding, animation frames, or permissions. These properties remain [unverified] until you check the actual supplied files. The desktop wallpaper command downloads no image. Source: [image validation](scripts/wallpaper.sh).
+When an existing vendored widget's source or schema changes, the script reloads that desklet after committing its files/settings transaction. A failed reload leaves the journal available and prints retry and recovery commands. The system graph defers its first update until its actor is attached to Cinnamon. Sources: [widgets](scripts/widgets.sh) and [graph source](vendor/desklets/system-monitor-graph@rcassani/desklet.js).
 
-Before adding an external file, verify redistribution permission and record its original URL, author, license, retrieval date, exact reused path, and modifications in [credits](credits.md). Missing or unclear licenses require placeholders. Do not use generated artwork, copied logos, official video clips, sexualized material, flashing effects, or low-contrast text. Approval does not establish ownership.
+Music is unavailable. Application removes `ina-media@holo-ricing` from enabled desklets and deletes only unchanged files established as project-owned by the widgets journal. Externally changed or untracked files are retained. Other music widgets are preserved. Calendar and System Monitor Graph retain their adjacent [Calendar](vendor/desklets/calendar@deeppradhan/LICENSE) and [graph](vendor/desklets/system-monitor-graph@rcassani/LICENSE) licenses. Source: [retirement helper](scripts/lib/widget-removal.sh).
 
-## Selected GRUB and lock images
+## Image choices and downloads
 
-[image-sources.json](dotfiles/image-sources.json) records the four selected URLs, their order, source pages, permission status, and the metadata check date. It contains no image bytes. GRUB uses wallpaper 1123929 by mistimagi from [Alpha Coders](https://wall.alphacoders.com/big.php?i=1123929). That source permits private, personal use and asks users to contact the artist for other use. The repository does not redistribute this wallpaper.
+[assets.example.json](dotfiles/assets.example.json) contains `desktop_image`, exactly three `lock_images`, optional `grub_image`, reserved `login_image`, and `approved`. Populate it with absolute local paths and pass `--asset-config PATH`. Direct component commands require explicit `--approved`; the JSON field does not grant their approval. The combined runner has separate reuse rules for previously approved selections, described in [its guide](ina_rice.md). `login_image` is unused by these commands. The wallpaper command downloads nothing.
+
+Selected images are fully decoded through GdkPixbuf and must be static. Header checks are also performed for Bash wallpaper/JPEG inputs. These checks do not establish copyright, permissions, safe subject matter, or the absence of flashing content in a source video. Use approved static files. Record original URL, author, license, retrieval date, exact reused paths, and modifications in [credits](credits.md); unresolved permissions remain [unverified].
+
+[image-sources.json](dotfiles/image-sources.json) records four selected download URLs, metadata, permissions status, and the recorded check date. The GRUB record identifies Alpha Coders wallpaper 1123929 by mistimagi for private personal use. The three lock JPEGs are ordered as:
+
+1. MoeWalls winter forest thumbnail, `lock-1.jpg`.
+2. ArtStation background 4, `lock-2.jpg`.
+3. ArtStation background 1, `lock-3.jpg`.
+
+The lock image authorship/permissions and exact ArtStation CDN associations retain the [unverified] qualifiers in that record. Download permission flags in configuration are not proof of redistribution rights. Image bytes are stored locally, not in the repository.
+
+Downloads require explicit application and `--download-images --approved`. They use HTTPS, refuse redirects, disable wget user configuration and HSTS cache writes, check at least 128 MiB free on state and destination filesystems, and limit each download pipeline to 180 seconds and 32 MiB. A bounded stream limits temporary output independently of Content-Length. Matching component-owned downloads are reused; conflicting existing files are refused. Validated bytes are journaled before publication and temporary files are removed on catchable interruption. Source: [image helper](scripts/lib/images.sh).
+
+## Lock cycle and native worker
+
+Prepare the selected images while choosing an independent desktop image:
+
+```bash
+bash Ina/scripts/lockscreen.sh --download-images --dry-run --image /absolute/desktop.png
+bash Ina/scripts/lockscreen.sh --download-images --apply --approved --image /absolute/desktop.png
+```
+
+Preparation writes `$XDG_DATA_HOME/ina/lockscreen/lock-1.jpg`, `lock-2.jpg`, `lock-3.jpg`, and `assets.json`, defaulting to `~/.local/share/ina/lockscreen`. Repeated preparation retains the existing desktop selection when `--image` is omitted. Without a selection, `desktop_image` is empty and live setup will refuse it. Preparation changes no service, login, wallpaper, or boot setting. Source: [shell preparation](scripts/lockscreen.sh).
+
+Preview and enable motion separately:
+
+```bash
+bash Ina/scripts/lockscreen.sh --dry-run --asset-config "$HOME/.local/share/ina/lockscreen/assets.json" --approved --force-lock-on-activation
+bash Ina/scripts/lockscreen.sh --apply --apply-desktop --asset-config "$HOME/.local/share/ina/lockscreen/assets.json" --approved --force-lock-on-activation
+```
+
+For custom paths, `--image DESKTOP --images LOCK1 LOCK2 LOCK3 --approved` can replace `--asset-config`. All four must decode as static images and represent distinct files, including no hard-link duplicates. Live installation requires `--force-lock-on-activation`, which authorizes immediate locking of an active screensaver that this worker supervises. The selective installer supports this flag with `--asset-config PATH --approved` and without `--download-images`; the combined runner uses `--enable-lock-rotation`.
+
+Python handles setup and restoration. Setup compiles [lockscreen-worker.c](src/lockscreen-worker.c) and [lockscreen-native.c](src/lockscreen-native.c) before stopping an existing managed service, installs the executables under `$XDG_DATA_HOME/ina/lockscreen`, writes `$XDG_CONFIG_HOME/ina/lockscreen-service.json`, and enables/starts `$XDG_CONFIG_HOME/systemd/user/ina-lockscreen.service`. It refuses unowned active/enabled services or units and externally changed owned files. Reapplication retains the original backups and validated cycle position, retires an older owned Python worker, and updates the service. Source: [setup](scripts/lib/components/lockscreen.py).
+
+The C worker monitors Cinnamon's session-bus screensaver state. If no screensaver owns the bus name, it starts the distribution screensaver and supervises that child. Rotation is permitted only when the bus owner PID is that live child, locking is enabled, lockdown permits locking, and the session passes its live/guest/passwordless-login checks. It deliberately calls `Lock`, verifies the owner and active state, then selects the next image. It never takes over, terminates, or restarts an already running screensaver. Consequently an existing unrelated screensaver can leave the service running without rotation until that screensaver exits naturally. Source: [worker](src/lockscreen-worker.c).
+
+The cycle is `lock-1`, `lock-2`, `lock-3`, then repeat. Default dwell is 300 seconds while locked; `--lock-image-seconds 10..3600` changes it on the direct lockscreen command. `$XDG_STATE_HOME/ina/lock-rotation-live.json` stores a private ownership token and the next zero-based index. The next lock continues from that saved position. Invalid or externally changed state is refused. An exclusive private lock file prevents competing workers. Source: [worker](src/lockscreen-worker.c).
+
+GTK animates Cinnamon's existing wallpaper image using [lockscreen-motion.css](dotfiles/lockscreen-motion.css): a 24-second alternating pan/zoom with 360 transform steps per leg, at most 15 new transform values per second. This does not change GTK's global frame clock. Cinnamon supplies crossfades between still images. No video decoder, replacement lock window, authentication, or input handling is added. GTK animations must be enabled. An already running locker loads the CSS on its next natural process start; setup never restarts it.
+
+The native helper changes Cinnamon's shared background URI while locked. The configured desktop image is restored on unlock, screensaver owner loss, service stop, and normal worker exit. Pipe closure lets the separate helper attempt restoration after a worker crash; `ExecStopPost` also invokes restoration, and the service restarts after failure. Recovery is conditional on the wallpaper still matching an owned value; external wallpaper edits are preserved and reported. This is a recovery design, not a guarantee after power loss or simultaneous process termination. A recorded Mint X11 check observed ordered image changes, pan motion, normal password unlock, and restoration; the recovery paths still have the limits described below. Sources: [worker](src/lockscreen-worker.c) and [helper](src/lockscreen-native.c).
+
+Inspect service status and cycle position without triggering a lock:
+
+```bash
+systemctl --user status ina-lockscreen.service
+journalctl --user -u ina-lockscreen.service
+"${XDG_DATA_HOME:-$HOME/.local/share}/ina/lockscreen/lockscreen-worker" "${XDG_CONFIG_HOME:-$HOME/.config}/ina/lockscreen-service.json" --status
+```
+
+`--status` reports `next_index`. To request a lock explicitly, run `bash Ina/scripts/lockscreen.sh --lock-now` as the X11 desktop user, or add `--dry-run` to preview. This checks standard Cinnamon locking settings, allows 60 seconds for the lock reply, and checks `GetActive`. Acknowledgement and active state do not independently verify the authentication UI. Unlock normally.
+
+Restore live setup before removing its images:
+
+```bash
+bash Ina/scripts/restore.sh --component lockscreen --dry-run
+bash Ina/scripts/restore.sh --component lockscreen --apply
+bash Ina/scripts/restore.sh --component lockscreen-images --apply
+```
+
+Live restore first validates owned executable/unit files, disables and stops the managed service, acquires its live lock, then restores backed-up settings, CSS, files, and token-owned cycle state, and reloads the user manager. Restore refuses conflicting external edits. `lockscreen-images` owns only the separately prepared images/configuration. The Python `--test-root` simulation is isolated and does not install a live service or prove real lock behavior. Sources: [restore routing](scripts/restore.sh), [Python restore](scripts/lib/engine.py), and [lock model](scripts/lib/components/lockscreen.py).
+
+## Native helpers
+
+```bash
+bash Ina/scripts/build-native.sh --dry-run
+bash Ina/scripts/build-native.sh --apply
+```
+
+This builds `image-check`, `lockscreen-native`, `lockscreen-worker`, and `widget-position` into `$XDG_DATA_HOME/ina/bin`, records each C source hash beside it, and uses a `native` backup journal. Compilation uses C11, optimization, warnings as errors, and linker RELRO/NOW. Each result receives a small check before installation. Matching source hashes allow image validation and monitor geometry queries to reuse installed helpers. Lock service setup separately builds its managed copies. Restore these shared helpers with `bash Ina/scripts/restore.sh --component native --apply`. Source: [build script](scripts/build-native.sh).
+
+## GRUB preparation and activation
 
 ```bash
 bash Ina/scripts/grub.sh --dry-run --download-images --approved
 bash Ina/scripts/grub.sh --apply --allow-boot-change --download-images --approved
 ```
 
-These commands prepare `~/.local/share/ina/grub`, or `$XDG_DATA_HOME/ina/grub` when configured. They do not run `sudo` or change boot files. The downloader uses `wget`, requires HTTPS, refuses redirects, checks at least 128 MiB free on the temporary and destination filesystems, and accepts only a file no larger than 32 MiB with a JPEG header. A bounded output stream limits temporary file size, and `timeout` limits each attempt to 180 seconds. User wget configuration and its HSTS [stored HTTPS connection policy] cache are disabled. The script reuses a matching component-owned download on repeat runs, rejects conflicting files, journals original bytes before publishing files, and removes its temporary download on catchable interruption. Full JPEG decoding, network behavior, repeat application, and interruption recovery remain [unverified]. Sources: [GRUB script](scripts/grub.sh), [image helper](scripts/lib/images.sh), and [backup helper](scripts/lib/shell-common.sh).
+Preparation writes `$XDG_DATA_HOME/ina/grub`, defaulting to `~/.local/share/ina/grub`. It does not run sudo or alter boot files. Use `--image /absolute/background.jpg --approved` for a local JPEG, or `--asset-config PATH` with a separate `grub_image`; the desktop field is not a fallback. The prepared baseline JPEG is normalized locally when necessary, without changing the original input. Source: [GRUB component](scripts/grub.sh).
 
-The menu adapts the right-side layout from Aleph1-9012's [Evangelion theme](https://www.gnome-look.org/p/2370768). It uses three unchanged dark card pieces, parchment entry text, teal selection text, the Ina background, and GRUB's default font. It copies no character artwork, custom font, installer, or GRUB module from that project. The retained [license](vendor/grub-evangelion/LICENSE) is Apache 2.0. Exact reused paths, source revision, retrieval date, and modifications are in [NOTICE](vendor/grub-evangelion/NOTICE). Appearance, text contrast at the chosen resolution, clipping, and boot compatibility remain [unverified]. Preview in a disposable VM before manual installation.
+The right-side menu adapts Aleph1-9012's Evangelion theme layout, retains three unchanged dark selector pieces, and uses parchment entries, teal selection text, the selected background, and GRUB's default font. No character artwork, custom font, installer, or GRUB module is copied from that project. Its [Apache 2.0 license](vendor/grub-evangelion/LICENSE) and exact reused paths/revision are retained in [NOTICE](vendor/grub-evangelion/NOTICE).
 
-The three lock sources are ordered as requested: the [MoeWalls winter forest thumbnail](https://moewalls.com/wp-content/uploads/2023/03/ninomae-inanis-winter-forest-virtual-youtuber-thumb.jpg), [ArtStation background 4](https://cdnb.artstation.com/p/assets/images/images/054/888/645/large/noah-who-ina-background-4.jpg?1665599243), and [ArtStation background 1](https://cdnb.artstation.com/p/assets/images/images/054/888/649/large/noah-who-ina-background-1.jpg?1665599247). They are downloaded in that order to `$XDG_DATA_HOME/ina/lockscreen`, defaulting to `~/.local/share/ina/lockscreen`. Sources: [selected records](dotfiles/image-sources.json) and [shell preparation](scripts/lockscreen.sh).
+Preview with `grub-emu` or a disposable VM at the intended resolution before activation. Long labels, contrast, selection, clipping, JPEG compatibility, and real boot recovery remain [unverified]. The component prints a manual recipe requiring unused Ina destinations. The [combined runner](ina_rice.md) can activate with `--install-grub`, keeps a root-owned journal under `/var/lib/ina-rice-grub`, and validates the generated menu. Its restore command is:
 
 ```bash
-bash Ina/scripts/lockscreen.sh --download-images --dry-run
-bash Ina/scripts/lockscreen.sh --download-images --apply --approved
+sudo bash Ina/ina_rice.sh --restore-grub --apply
 ```
 
-Preparation writes `lock-1.jpg`, `lock-2.jpg`, `lock-3.jpg`, and `assets.json`. It creates no service and changes no wallpaper, login setting, or boot file. The local JSON contains the three downloaded paths and an empty desktop path unless you explicitly supply `--image PATH` or a configuration with `desktop_image`. Select one independent static desktop image before using that JSON with the test-only model. The JSON does not grant approval; using the model still requires `--approved`. Source: [shell preparation](scripts/lockscreen.sh).
+Only use this for runner-managed boot files. Existing known Ina installations require its explicit `--adopt-existing-grub` flow; unknown or externally changed files are refused. Successful runner restore archives the boot journal and prints the generated-menu fallback location. User preparation is restored separately with `bash Ina/scripts/restore.sh --component grub --apply`.
 
-Restore these prepared files using `bash Ina/scripts/restore.sh --component lockscreen-images --apply`. Existing Python model backups remain separate under `lockscreen` and use `--component lockscreen`. The installer accepts `--components lockscreen --download-images --approved` for image preparation only. Live rotation remains disabled until lock detection and restoration are tested. Download, repeated preparation, rollback, and live lock behavior remain [unverified]. Sources: [installer](scripts/install.sh), [restore](scripts/restore.sh), and [lock model](scripts/lib/components/lockscreen.py).
+For files installed using the component's current manual recipe, remove only those exact destinations and regenerate the menu:
 
-## Backups and restore
+```bash
+sudo rm -- /etc/default/grub.d/90-ina.cfg /boot/grub/themes/ina/theme.txt /boot/grub/themes/ina/background.jpg /boot/grub/themes/ina/LICENSE /boot/grub/themes/ina/NOTICE
+sudo rm -- /boot/grub/themes/ina/selected_c.png /boot/grub/themes/ina/selected_e.png /boot/grub/themes/ina/selected_w.png
+sudo rmdir -- /boot/grub/themes/ina
+sudo update-grub
+```
 
-Backups live under `$XDG_STATE_HOME/ina/backups/COMPONENT/manifest.json`, defaulting to `~/.local/state/ina/backups/COMPONENT/manifest.json`. Bash manifests use format `ina-bash-1`; retained Python components keep their earlier format. Manifests record original setting values, contents, permissions, and whether files existed. State directory mode is 700; manifest mode is 600. Sources: [Bash implementation](scripts/lib/shell-common.sh) and [Python implementation](scripts/lib/engine.py).
+Older installations may have selector files under `selectors/`; use the recipe/journal corresponding to that installation. At GRUB's prompt, `set theme=` then Esc is the documented rendering fallback, still [unverified]. No command automatically reboots.
 
-The first Bash backup is retained across repeat applications. Restore an older Python backup before applying its Bash replacement. The restore tool uses Python for that recovery and archives the restored journal as `manifest.python-restored.json`. Firefox, VS Code, and lockscreen journals remain active in their original format. Sources: [restore routing](scripts/restore.sh) and [legacy archive handling](scripts/lib/engine.py). Gaming mode snapshots each run and retains prior run journals. Writes are atomic and operations share a lock. Symbolic-link targets and test paths outside `/tmp` are refused. Preview creates no backup, writes no configuration, launches no game, downloads nothing, and invokes no `sudo`. GRUB and lock-image downloads require explicit application and `--download-images --approved`. Source: [Bash implementation](scripts/lib/shell-common.sh). Runtime checks of this conversion are [unverified].
+## Backups and restoration
+
+Backups are stored at `$XDG_STATE_HOME/ina/backups/COMPONENT/manifest.json`, defaulting to `~/.local/state/ina/backups/COMPONENT/manifest.json`. State mode is 700 and manifest mode is 600. Bash journals use `ina-bash-1`; retained Python components use their earlier format. Originals include file existence, contents, modes, and setting values. First-application originals are retained across repeated applications, while interrupted runs attempt to roll back only their own changes. Operations share a transaction lock and use atomic file replacement. Sources: [Bash helpers](scripts/lib/shell-common.sh) and [Python engine](scripts/lib/engine.py).
 
 ```bash
 bash Ina/scripts/restore.sh
@@ -108,21 +199,19 @@ bash Ina/scripts/restore.sh --component window-controls --dry-run
 bash Ina/scripts/restore.sh --component window-controls --apply
 ```
 
-Restore removes component-created files or restores recorded contents and permissions. Bash CSS restoration changes only the component's marked block, preserving surrounding text. User INI and Xresources edits may normalize trailing blank lines; restoration of those files uses their original backed-up bytes. Only directories recorded as newly created are removed, and only when empty. A conflicting edit to an owned setting, file, or block stops restoration. Preserve that edit manually before retrying. Source: [Bash restoration](scripts/lib/shell-common.sh). Its runtime behavior remains [unverified].
+Restoration requires `--apply` but no desktop opt-in. It checks owned values and files for conflicts before restoring their originals, removing component-created files, and removing only tracked empty directories. Conflicting owned edits stop restoration; preserve them manually before retrying. Marked GTK CSS blocks restore independently so surrounding user CSS survives. Widget journals restore owned `.value` fields while retaining unrelated widget values and schema metadata. Source: [restore helpers](scripts/lib/shell-common.sh) and [widget settings](scripts/lib/widget-settings.sh).
 
-Close Firefox before restoring it. Restore handles owned values in `prefs.js`, the backed-up `user.js`, and optional CSS while preserving other preferences. Sources: [Firefox restoration](scripts/lib/components/firefox.py) and [historical startup-preference test](https://github.com/Roonil03/Holo-Ricing/blob/303e5d78dc515395c264af554a7f1fd955e11da7/Ina/tests/test_behaviors.py).
+Restore an older Python journal before applying its Bash replacement. `restore.sh` routes such journals through Python and archives migrated components as `manifest.python-restored.json`. Firefox, VS Code, and lockscreen retain their Python journals. Close Firefox before restoring; restore adjusts only owned `prefs.js` values and restores its backed-up user files, preserving unrelated preferences. Restart Firefox manually afterward.
 
-Gaming mode records each run's state before changing settings. Normal exit, launch failure, and catchable signals restore prior values. After an uncatchable termination such as SIGKILL, run:
+Gaming mode snapshots each run and retains previous run journals. It launches the command in a new session, returns its exit status, and attempts to terminate its process group and restore settings on exit, launch failure, or catchable interruption. An active interrupted journal blocks a new gaming run. After SIGKILL or another uncatchable termination:
 
 ```bash
 bash Ina/scripts/restore.sh --component gaming-mode --apply
 ```
 
-Source: [Bash gaming implementation](scripts/gaming-mode.sh). Command exit status, signal handling, and restoration are [unverified] for this conversion.
+Game signal handling and restoration on the real desktop remain [unverified]. Source: [gaming mode](scripts/gaming-mode.sh).
 
-## Manual recovery
-
-If the desktop becomes unusable, switch to a text console and run the relevant command as your desktop user from the repository:
+For text-console recovery, run as the affected desktop user from the repository:
 
 ```bash
 dbus-run-session -- bash Ina/scripts/restore.sh --component taskbar --apply
@@ -132,41 +221,20 @@ dbus-run-session -- bash Ina/scripts/restore.sh --component cursor --apply
 dbus-run-session -- bash Ina/scripts/restore.sh --component animations --apply
 ```
 
-Components also print these commands with the actual absolute repository path. No restart follows. Real recovery from an unusable desktop is [unverified]; recorded rollback tests use isolated settings and files. Source: [Bash recovery output](scripts/lib/shell-common.sh).
+Scripts print recovery commands with the absolute repository path. A separate bus does not establish a running user service manager; live lock restore must also reach the desktop user's systemd manager. Actual recovery from an unusable desktop remains [unverified].
 
-GRUB preparation leaves the current boot configuration intact. Its manual activation recipe requires unused destinations and installs only an Ina theme and `/etc/default/grub.d/90-ina.cfg`. It does not replace `/etc/default/grub`. Source: [GRUB component](scripts/grub.sh).
+## Verification and scope
 
-After manually installing those exact files, remove only them and regenerate the menu to restore the previous override order:
+This guide describes source behavior and the recorded check below. Broad application, repeat runs, failure recovery, downloaded content, and boot recovery are not certified. Local test harnesses may be present under the ignored `Ina/tests` directory, covering isolated settings/files, transactions, native helper behavior, and regression cases. They are not tracked in this checkout and are unavailable in a clean clone. Their presence does not imply every test passes; older component harnesses include historical assumptions, so inspect their fixtures before use. The earlier tracked tests remain in [commit 303e5d7](https://github.com/Roonil03/Holo-Ricing/tree/303e5d78dc515395c264af554a7f1fd955e11da7/Ina/tests). Static parsing and whitespace checks do not establish runtime correctness.
 
-```bash
-sudo rm -- /etc/default/grub.d/90-ina.cfg /boot/grub/themes/ina/theme.txt /boot/grub/themes/ina/background.jpg /boot/grub/themes/ina/LICENSE /boot/grub/themes/ina/NOTICE
-sudo rm -- /boot/grub/themes/ina/selectors/selected_c.png /boot/grub/themes/ina/selectors/selected_e.png /boot/grub/themes/ina/selectors/selected_w.png
-sudo rmdir -- /boot/grub/themes/ina/selectors /boot/grub/themes/ina
-sudo update-grub
-```
+The recorded live lock check on Mint X11 used a ten-second interval and observed `lock-1`, `lock-2`, `lock-3`, then `lock-1`. The user confirmed pan motion and normal password unlock. The static desktop image returned, `GetActive` was false after unlock, and the service recorded zero restarts. This checks the ordinary cycle/unlock path only. Crash recovery, session loss, unrelated screensaver ownership, and power-loss recovery remain [unverified]. Ten seconds can be selected only through the direct `lockscreen.sh --lock-image-seconds 10` setup command; the installer and combined runner do not expose that option.
 
-Restore prepared user files separately with `bash Ina/scripts/restore.sh --component grub --apply`. This command does not remove manually installed boot files. Source: [restore implementation](scripts/restore.sh).
+`--test-root PATH` redirects component state/files into an existing real directory beneath `/tmp`. It is for isolated simulation; it does not validate a real Cinnamon session. The [historical nested Cinnamon check](https://github.com/Roonil03/Holo-Ricing/blob/303e5d78dc515395c264af554a7f1fd955e11da7/Ina/tests/check_cinnamon.py) additionally needs Xephyr, `dbus-run-session`, Cinnamon, `timeout`, GTK 3, and an active X11 display.
 
-If theme rendering blocks the GRUB menu, press `c`, enter `set theme=`, and press Esc. This procedure and the rendered theme are [unverified] until tested in a disposable VM. Do not activate the theme before that test. Source: [GRUB guidance](scripts/grub.sh).
-
-## Verification
-
-The Bash conversion was reviewed with static checks only, as requested. The component scripts were not executed, including dry runs. No application, second-run, rollback, gaming command, nested Cinnamon session, or privileged operation was tested. Those results remain [unverified]. Earlier Python test results do not establish that the Bash conversion works.
-
-Static checks use `bash -n` to parse Bash without running it, Python's `ast.parse` for retained code, and `git diff --check` for whitespace. ShellCheck is not installed. The earlier Python implementation and test record remain in [commit 303e5d7](https://github.com/Roonil03/Holo-Ricing/tree/303e5d78dc515395c264af554a7f1fd955e11da7). The test folder is now local and ignored.
-
-Visual appearance, full image decoding, Firefox rendering, media controls, long-duration widget behavior, lock/unlock timing, live desktop recovery, and GRUB rendering and boot recovery remain [unverified]. Do not describe this conversion as safe based on static checks.
-
-## Unavailable and older features
-
-Live lock rotation is disabled. Cinnamon paints the user's desktop background on the saver; activation alone does not establish locking. The test-only model cycles exactly three approved images and restores the static image on unlock, exit, or session loss. It installs no service. Sources: [model](scripts/lib/components/lockscreen.py) and [original screen-locker documentation](https://github.com/linuxmint/cinnamon-screensaver/blob/master/README.md).
-
-Soundbox is unavailable because its original license and media controls could not be verified. Source: [widget component](scripts/widgets.sh). Calendar and System Monitor Graph retain their [Calendar](vendor/desklets/calendar@deeppradhan/LICENSE) and [System Monitor Graph](vendor/desklets/system-monitor-graph@rcassani/LICENSE) licenses. The modified [graph source](vendor/desklets/system-monitor-graph@rcassani/desklet.js) defers its first update until Cinnamon attaches its actor.
-
-Older `bootlogo.sh`, `cursor-toggle.sh`, `desktop-bg.sh`, `fastfetch.sh`, `login_screen.sh`, `neofetch.sh`, and `tiling-window.sh` are unchanged and excluded. They do not implement the new backup and preview requirements. Original creators of some older artwork and its redistribution permissions remain [unverified]. Do not treat them as commands in this setup. Sources: the older scripts and [credits](credits.md).
+Older `bootlogo.sh`, `cursor-toggle.sh`, `desktop-bg.sh`, `fastfetch.sh`, `login_screen.sh`, `neofetch.sh`, and `tiling-window.sh` remain excluded from the supported component installer/runner. They do not share its complete preview and backup behavior. The recorded `gTile@shuairan` extension is not changed by these components. Run `bash Ina/scripts/login_screen.sh --dry-run` to report the configured LightDM background. This script reads the greeter configuration and preserves the login image. Older artwork permissions remain [unverified]; see [credits](credits.md).
 
 ## License and rights holders
 
-The repository's [MIT license](../LICENSE) covers original project code only unless a file says otherwise. External code, themes, icons, cursors, and artwork retain their own licenses. See [credits](credits.md) for components, their sources, and links. Retained external license files remain beside the vendored code.
+The repository's [MIT license](../LICENSE) covers original project code unless a file says otherwise. External themes, code, icons, cursors, and artwork retain their own licenses. See [credits](credits.md) and the license files beside vendored components.
 
-Ninomae Ina'nis, hololive, and related marks belong to their respective rights holders, including Cover Corp. This is an unofficial fan configuration project with no claimed affiliation or endorsement. Sources: [official talent page](https://hololive.hololivepro.com/en/talents/ninomae-inanis/) and [Cover's guidelines](https://hololivepro.com/en/terms/).
+Ninomae Ina'nis, hololive, and related marks belong to their respective rights holders, including Cover Corp. This is an unofficial fan configuration with no claimed affiliation or endorsement.
