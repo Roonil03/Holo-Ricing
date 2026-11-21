@@ -27,6 +27,8 @@
 #define SCREEN_PATH "/org/cinnamon/ScreenSaver"
 #define BUS "org.freedesktop.DBus"
 #define BUS_PATH "/org/freedesktop/DBus"
+#define MIN_IMAGES 3
+#define MAX_IMAGES 8
 
 static volatile sig_atomic_t stopping;
 static void stop(int signum) { (void)signum; stopping = 1; }
@@ -191,13 +193,13 @@ static const char *string_member(void *object, const char *name)
     return typed(node, "gchararray") ? node_string(node) : NULL;
 }
 struct Config {
-    char *desktop, *images[3], *helper, *state, *token, *lock_path;
-    int interval, motion;
+    char *desktop, *images[MAX_IMAGES], *helper, *state, *token, *lock_path;
+    int image_count, interval, motion;
 };
 static void free_config(struct Config *c)
 {
     free(c->desktop); free(c->helper); free(c->state); free(c->token); free(c->lock_path);
-    for (int i = 0; i < 3; ++i) free(c->images[i]);
+    for (int i = 0; i < MAX_IMAGES; ++i) free(c->images[i]);
 }
 static int load_config(const char *path, struct Config *c)
 {
@@ -213,7 +215,11 @@ static int load_config(const char *path, struct Config *c)
     const char *lock = string_member(o, "lock_path"), *mode = string_member(o, "mode");
     void *images = object_member(o, "lock_images"), *interval = object_member(o, "image_interval");
     int valid = desktop && helper && state && token && lock && images && node_type(images) == 1;
-    if (valid) valid = array_length(node_array(images)) == 3;
+    if (valid) {
+        unsigned int count = array_length(node_array(images));
+        valid = count >= MIN_IMAGES && count <= MAX_IMAGES;
+        if (valid) c->image_count = (int)count;
+    }
     if (object_member(o, "mode") && !mode) valid = 0;
     if (!mode) mode = "rotation";
     if (strcmp(mode, "rotation") && strcmp(mode, "motion") && strcmp(mode, "motion-cycle")) valid = 0;
@@ -225,13 +231,13 @@ static int load_config(const char *path, struct Config *c)
     if (valid) {
         c->desktop = strdup(desktop); c->helper = strdup(helper); c->state = strdup(state);
         c->token = strdup(token); c->lock_path = strdup(lock); c->motion = !strcmp(mode, "motion");
-        for (int i = 0; i < 3; ++i) {
+        for (int i = 0; i < c->image_count; ++i) {
             void *n = array_element(node_array(images), (unsigned int)i);
             if (!typed(n, "gchararray")) { valid = 0; break; }
             c->images[i] = strdup(node_string(n));
+            if (!c->images[i]) { valid = 0; break; }
         }
-        valid = valid && c->desktop && c->helper && c->state && c->token && c->lock_path &&
-            c->images[0] && c->images[1] && c->images[2];
+        valid = valid && c->desktop && c->helper && c->state && c->token && c->lock_path;
     }
     unref(parser);
     return valid;
@@ -249,7 +255,7 @@ static int read_index(const struct Config *c, void **out_parser)
     void *index = object_member(o, "next_index");
     int result = -1;
     if (object_size(o) == 2 && token && !strcmp(token, c->token) && typed(index, "gint64") &&
-        node_int(index) >= 0 && node_int(index) < 3) result = (int)node_int(index);
+        node_int(index) >= 0 && node_int(index) < c->image_count) result = (int)node_int(index);
     if (out_parser && result >= 0) *out_parser = parser;
     else unref(parser);
     return result;
@@ -271,7 +277,7 @@ static int save_index(const struct Config *c, int *index)
         if (parser) unref(parser);
         fputs("Rotation state changed externally\n", stderr); return 0;
     }
-    int next = (*index + 1) % 3;
+    int next = (*index + 1) % c->image_count;
     object_set_int(node_object(parser_root(parser)), "next_index", next);
     char *data = json_string(parser_root(parser), 0);
     unref(parser);
@@ -316,9 +322,15 @@ static void exec_helper(const struct Config *c, const char *action, int lock_fd)
     char number[32];
     snprintf(number, sizeof(number), "%d", lock_fd);
     if (lock_fd >= 0 && fcntl(lock_fd, F_SETFD, 0)) _exit(126);
-    if (!strcmp(action, "--check"))
-        execl(c->helper, c->helper, action, c->desktop, c->images[0], c->images[1], c->images[2], (char *)NULL);
-    else execl(c->helper, c->helper, action, number, c->desktop, c->images[0], c->images[1], c->images[2], (char *)NULL);
+    char *arguments[MAX_IMAGES + 5];
+    int count = 0;
+    arguments[count++] = c->helper;
+    arguments[count++] = (char *)action;
+    if (strcmp(action, "--check")) arguments[count++] = number;
+    arguments[count++] = c->desktop;
+    for (int i = 0; i < c->image_count; ++i) arguments[count++] = c->images[i];
+    arguments[count] = NULL;
+    execv(c->helper, arguments);
     _exit(127);
 }
 static int helper_once(const struct Config *c, const char *action, int lock_fd)

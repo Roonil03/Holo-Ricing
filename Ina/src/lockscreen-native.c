@@ -17,6 +17,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#define MIN_IMAGES 3
+#define MAX_IMAGES 8
+
 static volatile sig_atomic_t stopping;
 static volatile sig_atomic_t signal_write = -1;
 static void stop(int signum)
@@ -163,28 +166,29 @@ static int set_wallpaper(void *settings, const char *target, const char *expecte
 int main(int argc, char **argv)
 {
     if (argc == 2 && !strcmp(argv[1], "--help")) {
-        puts("lockscreen-native --check DESKTOP IMAGE1 IMAGE2 IMAGE3\n"
-             "lockscreen-native --serve LOCK_FD DESKTOP IMAGE1 IMAGE2 IMAGE3\n"
-             "lockscreen-native --restore LOCK_FD DESKTOP IMAGE1 IMAGE2 IMAGE3\n"
-             "Supervisor protocol: R restores, 0/1/2 selects a static lock image, Q exits.\n"
+        puts("lockscreen-native --check DESKTOP IMAGE1 IMAGE2 IMAGE3 [IMAGE4 ... IMAGE8]\n"
+             "lockscreen-native --serve LOCK_FD DESKTOP IMAGE1 IMAGE2 IMAGE3 [IMAGE4 ... IMAGE8]\n"
+             "lockscreen-native --restore LOCK_FD DESKTOP IMAGE1 IMAGE2 IMAGE3 [IMAGE4 ... IMAGE8]\n"
+             "Supervisor protocol: R restores, 0-7 selects a configured static lock image, Q exits.\n"
              "Cinnamon supplies the crossfade; this helper does not render video or authenticate.");
         return 0;
     }
-    int check = argc == 6 && !strcmp(argv[1], "--check");
-    int serve = argc == 7 && !strcmp(argv[1], "--serve");
-    int restore = argc == 7 && !strcmp(argv[1], "--restore");
+    int check = argc >= MIN_IMAGES + 3 && argc <= MAX_IMAGES + 3 && !strcmp(argv[1], "--check");
+    int serve = argc >= MIN_IMAGES + 4 && argc <= MAX_IMAGES + 4 && !strcmp(argv[1], "--serve");
+    int restore = argc >= MIN_IMAGES + 4 && argc <= MAX_IMAGES + 4 && !strcmp(argv[1], "--restore");
     if (!check && !serve && !restore) { fputs("Use --help for usage\n", stderr); return 2; }
     if (!check && !lock_valid(argv[2])) { fputs("An inherited private rotation lock is required\n", stderr); return 2; }
     if (!load_api()) return 2;
-    char *uris[4] = {NULL, NULL, NULL, NULL};
+    char *uris[MAX_IMAGES + 1] = {0};
     int result = 2, offset = check ? 2 : 3;
-    struct stat identities[4];
-    for (int i = 0; i < 4; ++i) {
+    int count = argc - offset;
+    struct stat identities[MAX_IMAGES + 1];
+    for (int i = 0; i < count; ++i) {
         uris[i] = image_uri(argv[offset + i]);
         if (!uris[i] || stat(argv[offset + i], &identities[i])) goto done;
         for (int j = 0; j < i; ++j) {
             if (identities[i].st_dev == identities[j].st_dev && identities[i].st_ino == identities[j].st_ino) {
-                fputs("Desktop and all three lock images must be distinct files\n", stderr);
+                fputs("Desktop and all lock images must be distinct files\n", stderr);
                 goto done;
             }
         }
@@ -201,7 +205,7 @@ int main(int argc, char **argv)
     schema_unref(schema);
     if (!settings) goto done;
     if (restore) {
-        result = set_wallpaper(settings, uris[0], NULL, uris, 4) ? 0 : 1;
+        result = set_wallpaper(settings, uris[0], NULL, uris, count) ? 0 : 1;
         unref(settings);
         goto done;
     }
@@ -234,18 +238,18 @@ int main(int argc, char **argv)
         if (size == 0) break; /* Supervisor crash closes its end of the pipe. */
         if (size < 0) { result = 1; break; }
         if (command == 'Q') break;
-        int index = command == 'R' ? 0 : command >= '0' && command <= '2' ? command - '0' + 1 : -1;
+        int index = command == 'R' ? 0 : command >= '0' && command < '0' + count - 1 ? command - '0' + 1 : -1;
         if (index < 0) { fputs("Invalid supervisor command\n", stderr); result = 2; break; }
-        if (!set_wallpaper(settings, uris[index], last, uris, 4)) { result = 1; break; }
+        if (!set_wallpaper(settings, uris[index], last, uris, count)) { result = 1; break; }
         last = uris[index];
         if (fputs("OK\n", stdout) == EOF || fflush(stdout)) { result = 1; break; }
     }
-    if (!set_wallpaper(settings, uris[0], last, uris, 4)) result = 1;
+    if (!set_wallpaper(settings, uris[0], last, uris, count)) result = 1;
     signal_write = -1;
     close(wake[0]); close(wake[1]);
     unref(settings);
 done:
-    for (int i = 0; i < 4; ++i) if (uris[i]) free(uris[i]);
+    for (int i = 0; i < MAX_IMAGES + 1; ++i) free(uris[i]);
     if (pixbuf) dlclose(pixbuf);
     if (gio) dlclose(gio);
     return result;
