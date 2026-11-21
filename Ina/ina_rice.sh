@@ -258,37 +258,34 @@ if ((EUID == 0)); then
     # Plain sudo commonly removes session variables. Recover only the supported
     # desktop variables from an actual Cinnamon process belonging to this UID.
     if "$apply" && ! "$grub_only" && [[ "${XDG_SESSION_TYPE:-}" != x11 || "${XDG_CURRENT_DESKTOP:-}" != *Cinnamon* || -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]]; then
-        need python3
-        session_output="$(python3 - "$uid" <<'PYSESSION'
-import os
-from pathlib import Path
-import sys
-uid = int(sys.argv[1])
-keys = ('DISPLAY', 'XAUTHORITY', 'DBUS_SESSION_BUS_ADDRESS', 'XDG_RUNTIME_DIR',
-        'XDG_SESSION_TYPE', 'XDG_CURRENT_DESKTOP', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME')
-sessions = set()
-for process in Path('/proc').iterdir():
-    if not process.name.isdigit():
-        continue
-    try:
-        if process.stat().st_uid != uid or (process / 'comm').read_text().strip() != 'cinnamon':
-            continue
-        values = dict(item.split(b'=', 1) for item in (process / 'environ').read_bytes().split(b'\0') if b'=' in item)
-        selected = tuple(values.get(key.encode(), b'').decode() for key in keys)
-        if selected[4] == 'x11' and 'Cinnamon' in selected[5] and selected[2]:
-            if any('\n' in value or '\r' in value for value in selected):
-                raise ValueError('Multiline desktop environment refused')
-            sessions.add(selected)
-    except (OSError, UnicodeError):
-        continue
-if len(sessions) != 1:
-    sys.exit('Cannot identify one Cinnamon X11 session; preserve its environment as shown by --help')
-for value in sessions.pop():
-    print(value)
-PYSESSION
-)" || fail 'No unambiguous desktop session; no component was run'
-        mapfile -t session_values <<< "$session_output"
+        need stat
         session_keys=(DISPLAY XAUTHORITY DBUS_SESSION_BUS_ADDRESS XDG_RUNTIME_DIR XDG_SESSION_TYPE XDG_CURRENT_DESKTOP XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME)
+        session_values=()
+        for process in /proc/[0-9]*; do
+            [[ "$(stat -c %u -- "$process" 2>/dev/null)" == "$uid" ]] || continue
+            IFS= read -r name < "$process/comm" 2>/dev/null || continue
+            [[ "$name" == cinnamon ]] || continue
+            candidate=()
+            for index in "${!session_keys[@]}"; do candidate[index]=''; done
+            while IFS= read -r -d '' field; do
+                for index in "${!session_keys[@]}"; do
+                    [[ "$field" == "${session_keys[index]}="* ]] || continue
+                    value="${field#*=}"
+                    [[ "$value" != *$'\n'* && "$value" != *$'\r'* ]] || fail 'Multiline desktop environment refused'
+                    candidate[index]="$value"
+                    break
+                done
+            done < "$process/environ" || continue
+            [[ "${candidate[4]}" == x11 && "${candidate[5]}" == *Cinnamon* && -n "${candidate[2]}" ]] || continue
+            if ((${#session_values[@]})); then
+                for index in "${!session_keys[@]}"; do
+                    [[ "${candidate[index]}" == "${session_values[index]}" ]] || fail 'Multiple Cinnamon sessions; preserve the intended desktop environment'
+                done
+            else
+                session_values=("${candidate[@]}")
+            fi
+        done
+        ((${#session_values[@]})) || fail 'No Cinnamon X11 session found; preserve its environment as shown by --help'
         for index in "${!session_keys[@]}"; do
             key="${session_keys[$index]}"
             [[ -z "${session_values[$index]:-}" ]] || printf -v "$key" '%s' "${session_values[$index]}"
