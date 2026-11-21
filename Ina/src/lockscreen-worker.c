@@ -60,6 +60,9 @@ static void (*variant_get)(void *, const char *, ...);
 static void (*variant_unref)(void *);
 static int (*context_pending)(void *);
 static int (*context_iteration)(void *, int);
+static unsigned int (*timeout_add)(unsigned int, int (*)(void *), void *);
+static unsigned int (*unix_signal_add)(int, int (*)(void *), void *);
+static int (*source_remove)(unsigned int);
 static void *(*schema_default)(void);
 static void *(*schema_lookup)(void *, const char *, int);
 static int (*schema_has_key)(void *, const char *);
@@ -105,6 +108,9 @@ static int load_api(void)
     SYMBOL(gio, variant_unref, "g_variant_unref");
     SYMBOL(gio, context_pending, "g_main_context_pending");
     SYMBOL(gio, context_iteration, "g_main_context_iteration");
+    SYMBOL(gio, timeout_add, "g_timeout_add");
+    SYMBOL(gio, unix_signal_add, "g_unix_signal_add");
+    SYMBOL(gio, source_remove, "g_source_remove");
     SYMBOL(gio, schema_default, "g_settings_schema_source_get_default");
     SYMBOL(gio, schema_lookup, "g_settings_schema_source_lookup");
     SYMBOL(gio, schema_has_key, "g_settings_schema_has_key");
@@ -325,7 +331,7 @@ struct Worker {
     const struct Config *config;
     void *bus, *screensaver, *lockdown;
     pid_t locker, helper;
-    int input, output, locked, index, failed;
+    int input, output, locked, index, failed, check_pending;
     char *owner;
     double next_tick;
 };
@@ -539,6 +545,18 @@ static void *boolean_settings(const char *name, const char *key)
     void *settings = schema_has_key(schema, key) ? settings_new(schema, NULL, NULL) : NULL;
     schema_unref(schema); return settings;
 }
+static int check_due(void *data)
+{
+    struct Worker *w = data;
+    w->check_pending = 1;
+    return 1;
+}
+static int stop_requested(void *data)
+{
+    (void)data;
+    stopping = 1;
+    return 1;
+}
 static int supervise(const struct Config *c, int lock_fd, int index)
 {
     struct Worker w;
@@ -550,27 +568,38 @@ static int supervise(const struct Config *c, int lock_fd, int index)
     w.screensaver = boolean_settings("org.cinnamon.desktop.screensaver", "lock-enabled");
     w.lockdown = boolean_settings("org.cinnamon.desktop.lockdown", "disable-lock-screen");
     unsigned int active_id = 0, owner_id = 0;
+    unsigned int check_id = 0, term_id = 0, interrupt_id = 0;
     int result = 0;
     if (!w.bus || !w.screensaver || !w.lockdown) {
         fputs("Cinnamon settings and a session bus are required\n", stderr); goto done;
     }
     active_id = bus_subscribe(w.bus, NAME, NAME, "ActiveChanged", SCREEN_PATH, NULL, 0, active_changed, &w, NULL);
     owner_id = bus_subscribe(w.bus, BUS, BUS, "NameOwnerChanged", BUS_PATH, NAME, 0, owner_changed, &w, NULL);
+    /* Keep the existing one-second security/ownership refresh, but sleep in
+     * GLib so D-Bus events and shutdown signals dispatch without a 100ms poll.
+     * GLib signal sources also close the signal-before-block race. */
+    check_id = timeout_add(1000, check_due, &w);
+    term_id = unix_signal_add(SIGTERM, stop_requested, NULL);
+    interrupt_id = unix_signal_add(SIGINT, stop_requested, NULL);
+    if (!check_id || !term_id || !interrupt_id) goto done;
     if (!restore(&w)) goto done;
     result = 1;
-    double next_check = 0;
+    w.check_pending = 1;
     while (!stopping && !w.failed) {
         while (context_pending(NULL)) context_iteration(NULL, 0);
         if (stopping || w.failed) break;
-        double now = monotonic();
-        if (now >= next_check) {
-            if (!step(&w, now)) { result = 0; break; }
-            next_check = now + 1;
+        if (w.check_pending) {
+            /* Consume one refresh even if several timer ticks were delayed. */
+            w.check_pending = 0;
+            if (!step(&w, monotonic())) { result = 0; break; }
         }
-        struct timespec pause = {0, 100000000}; nanosleep(&pause, NULL);
+        if (!stopping && !w.failed) context_iteration(NULL, 1);
     }
     if (w.failed) result = 0;
 done:
+    if (check_id) source_remove(check_id);
+    if (term_id) source_remove(term_id);
+    if (interrupt_id) source_remove(interrupt_id);
     if (active_id) bus_unsubscribe(w.bus, active_id);
     if (owner_id) bus_unsubscribe(w.bus, owner_id);
     if (!restore(&w)) result = 0;

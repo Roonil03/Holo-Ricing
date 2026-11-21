@@ -18,7 +18,21 @@
 #include <unistd.h>
 
 static volatile sig_atomic_t stopping;
-static void stop(int signum) { (void)signum; stopping = 1; }
+static volatile sig_atomic_t signal_write = -1;
+static void stop(int signum)
+{
+    (void)signum;
+    int saved = errno;
+    stopping = 1;
+    /* GLib may have threads: wake the input wait even if another thread
+     * receives the signal. The nonblocking pipe also closes the wait race. */
+    if (signal_write >= 0) {
+        char byte = 0;
+        ssize_t ignored = write(signal_write, &byte, 1);
+        (void)ignored;
+    }
+    errno = saved;
+}
 static void *gio, *pixbuf;
 static void *(*schema_default)(void);
 static void *(*schema_lookup)(void *, const char *, int);
@@ -191,6 +205,15 @@ int main(int argc, char **argv)
         unref(settings);
         goto done;
     }
+    int wake[2];
+    if (pipe(wake)) { unref(settings); goto done; }
+    for (int i = 0; i < 2; ++i) {
+        if (fcntl(wake[i], F_SETFD, FD_CLOEXEC) ||
+            fcntl(wake[i], F_SETFL, O_NONBLOCK)) {
+            close(wake[0]); close(wake[1]); unref(settings); goto done;
+        }
+    }
+    signal_write = wake[1];
     struct sigaction action;
     memset(&action, 0, sizeof(action));
     action.sa_handler = stop;
@@ -201,10 +224,10 @@ int main(int argc, char **argv)
     const char *last = uris[0];
     result = 0;
     while (!stopping) {
-        struct pollfd input = {STDIN_FILENO, POLLIN, 0};
-        int ready = poll(&input, 1, 100);
+        struct pollfd input[2] = {{STDIN_FILENO, POLLIN, 0}, {wake[0], POLLIN, 0}};
+        int ready = poll(input, 2, -1);
         if (ready < 0) { if (errno == EINTR) continue; result = 1; break; }
-        if (!ready) continue;
+        if (stopping || input[1].revents) break;
         char command;
         ssize_t size = read(STDIN_FILENO, &command, 1);
         if (size < 0 && errno == EINTR) continue;
@@ -218,6 +241,8 @@ int main(int argc, char **argv)
         if (fputs("OK\n", stdout) == EOF || fflush(stdout)) { result = 1; break; }
     }
     if (!set_wallpaper(settings, uris[0], last, uris, 4)) result = 1;
+    signal_write = -1;
+    close(wake[0]); close(wake[1]);
     unref(settings);
 done:
     for (int i = 0; i < 4; ++i) if (uris[i]) free(uris[i]);
