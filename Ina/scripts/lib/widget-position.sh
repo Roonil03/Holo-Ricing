@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 # Original MIT code. Read-only placement in Cinnamon stage pixels.
 ina_widget_workarea() (
     local native source_file source_hash installed_hash temporary
