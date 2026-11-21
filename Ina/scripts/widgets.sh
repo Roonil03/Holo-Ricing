@@ -3,6 +3,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/shell-common.sh"
 source "$SCRIPT_DIR/lib/widget-removal.sh"
+source "$SCRIPT_DIR/lib/widget-position.sh"
 ina_init widgets "$@"
 ina_desktop
 printf '%s\n' 'Available: clock, calendar, system. The retired Ina music desklet is removed.'
@@ -81,9 +82,8 @@ for name in "${INA_WIDGETS[@]}"; do
     config="$(ina_user_path "$INA_CONFIG/cinnamon/spices/$uuid/$identity.json")"
     settings="$schema"; [[ ! -f "$config" ]] || settings="$(cat -- "$config")"
     if [[ "$name" == system ]]; then
-        ina_need python3
         scale="$(jq -r '."scale-size".value // ."scale-size".default // 1' <<< "$settings")"
-        if position="$(python3 "$SCRIPT_DIR/lib/widget-position.py" "$scale" "$INA_TEST")"; then
+        if position="$(ina_widget_position "$scale")"; then
             read -r x y <<< "$position"
             printf 'System widget: primary monitor work area, upper right at %s,%s\n' "$x" "$y"
             # Reposition existing instances as well as newly allocated ones, without changing IDs.
