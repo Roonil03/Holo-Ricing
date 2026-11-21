@@ -4,7 +4,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/shell-common.sh"
 ina_init native "$@"
 ina_need cc sha256sum
-sources=(image-check lockscreen-native)
+sources=(image-check lockscreen-native lockscreen-worker widget-position)
 for name in "${sources[@]}"; do
     source_file="$(ina_path "$SCRIPT_DIR/../src/$name.c")"
     [[ -f "$source_file" ]] || ina_error "Native source is missing: $source_file"

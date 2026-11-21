@@ -123,14 +123,14 @@ def unit_arg(value):
     return '"' + value + '"'
 
 
-def native_binary(ctx):
+def native_binary(ctx, name):
     """Build before touching the running service; preview never invokes cc."""
-    source = Path(__file__).resolve().parents[3] / 'src/lockscreen-native.c'
+    source = Path(__file__).resolve().parents[3] / 'src' / (name + '.c')
     if ctx.dry:
-        print(f'Would compile native Cinnamon wallpaper helper: {source}')
+        print(f'Would compile native Cinnamon helper: {source}')
         return b''
     with tempfile.TemporaryDirectory(prefix='ina-lock-native-') as directory:
-        target = Path(directory) / 'lockscreen-native'
+        target = Path(directory) / name
         process = subprocess.Popen(['cc', '-std=c11', '-O2', '-Wall', '-Wextra', '-Werror',
                                     '-Wl,-z,relro,-z,now', str(source), '-o', str(target), '-ldl'],
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -145,18 +145,45 @@ def native_binary(ctx):
                 process.wait()
             raise
         if process.returncode:
-            raise Error('Could not build native wallpaper helper: ' + errors.decode(errors='replace').strip())
+            raise Error(f'Could not build {name}: ' + errors.decode(errors='replace').strip())
         return target.read_bytes()
 
 
+def retire_python_worker(ctx, path):
+    """Release the old installed worker while preserving its original backup."""
+    entry = ctx.manifest['files'].get(str(path))
+    if not entry:
+        return
+    path = reject_links(path)
+    current = path.read_bytes() if path.exists() else None
+    encoded = base64.b64encode(current).decode() if current is not None else None
+    if encoded not in (entry['original'], entry['applied']):
+        raise Error(f'File changed since application: {path}')
+    original = base64.b64decode(entry['original']) if entry['original'] is not None else None
+    if current == original:
+        return
+    print(f'Retire old Python worker: {path}')
+    if ctx.dry:
+        return
+    mode = stat.S_IMODE(path.stat().st_mode) if path.exists() else 0o600
+    before = ctx.run_files.get(path, (current, None, mode))
+    ctx.run_files[path] = (before[0], original, before[2])
+    entry['applied'] = entry['original']
+    ctx.save()
+    if original is None:
+        path.unlink(missing_ok=True)
+    else:
+        atomic(path, original, entry['mode'] or 0o600)
+
+
 def install_service(ctx, images, desktop):
-    worker = ctx.data / 'ina/lockscreen/lockscreen-worker.py'
+    worker = ctx.data / 'ina/lockscreen/lockscreen-worker'
+    old_worker = ctx.data / 'ina/lockscreen/lockscreen-worker.py'
     native = ctx.data / 'ina/lockscreen/lockscreen-native'
     config = ctx.config / 'ina/lockscreen-service.json'
     unit = ctx.config / 'systemd/user/ina-lockscreen.service'
     state = reject_links(ctx.state / 'lock-rotation-live.json')
     lock_path = reject_links(ctx.state / 'lock-rotation-live.lock')
-    source = Path(__file__).resolve().parents[1] / 'lockscreen-worker.py'
     style, style_bytes, gtk_css, gtk_text, style_block = motion_styles(ctx)
     if lock_path.exists():
         info = lock_path.stat()
@@ -181,14 +208,14 @@ def install_service(ctx, images, desktop):
     text = json.dumps({'mode': 'motion-cycle', 'image_interval': getattr(ctx.args, 'lock_image_seconds', 300),
                        'native_helper': str(native), 'desktop_image': str(desktop), 'lock_images': [str(p) for p in images],
                        'state': str(state), 'token': token, 'lock_path': str(lock_path)}, indent=2) + '\n'
-    command = ' '.join(unit_arg(p) for p in ('/usr/bin/python3', worker, config))
+    command = ' '.join(unit_arg(p) for p in (worker, config))
     unit_text = ('[Unit]\nDescription=Ina lockscreen wallpaper motion\n'
                  'After=graphical-session-pre.target\n\n[Service]\nType=simple\n'
                  f'ExecStartPre={command} --check\nExecStart={command}\nExecStopPost={command} --restore\n'
                  'KillMode=process\nRestart=on-failure\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n')
     managed = bool(ctx.manifest.get('service_managed'))
     # Never execute an externally edited unit or its ExecStopPost helper.
-    for path in (lock_path, worker, native, config, unit, style):
+    for path in (lock_path, worker, old_worker, native, config, unit, style):
         path = reject_links(path)
         entry = ctx.manifest['files'].get(str(path))
         if entry:
@@ -199,7 +226,9 @@ def install_service(ctx, images, desktop):
         for command_name in ('is-active', 'is-enabled'):
             if subprocess.run(['systemctl', '--user', command_name, '--quiet', 'ina-lockscreen.service']).returncode == 0:
                 raise Error('Refusing to take over an existing lockscreen service.')
-    binary = native_binary(ctx)
+    # Compile the complete replacement before stopping an existing installation.
+    binary = native_binary(ctx, 'lockscreen-native')
+    worker_binary = native_binary(ctx, 'lockscreen-worker')
     previous_active = False
     if not ctx.dry and managed:
         previous_active = subprocess.run(['systemctl', '--user', 'is-active', '--quiet', 'ina-lockscreen.service']).returncode == 0
@@ -228,12 +257,13 @@ def install_service(ctx, images, desktop):
             ctx.save()
             atomic(state, initial, 0o600)
         ctx.file(lock_path, b'', 0o600)
-        ctx.file(worker, source.read_bytes(), 0o700)
+        ctx.file(worker, worker_binary, 0o700)
         ctx.file(native, binary, 0o700)
         ctx.file(config, text, 0o600)
         ctx.file(unit, unit_text, 0o600)
         ctx.file(style, style_bytes, 0o600)
         ctx.file(gtk_css, gtk_text, block=style_block)
+        retire_python_worker(ctx, old_worker)
         ctx.setting('org.cinnamon.desktop.screensaver', 'lock-enabled', True)
         ctx.setting('org.cinnamon.desktop.background.slideshow', 'slideshow-enabled', False)
         ctx.setting('org.cinnamon.desktop.background', 'picture-uri', desktop.as_uri())
