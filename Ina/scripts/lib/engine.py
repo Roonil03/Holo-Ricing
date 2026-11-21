@@ -384,6 +384,7 @@ def parser():
     p.add_argument('--simulate-events', nargs='+', choices=['locked', 'tick', 'unlocked', 'lost-session', 'exit'])
     p.add_argument('--approved', action='store_true')
     p.add_argument('--force-lock-on-activation', action='store_true')
+    p.add_argument('--lock-image-seconds', type=int, metavar='10..3600', default=300)
     p.add_argument('--widgets', nargs='+')
     p.add_argument('--components', nargs='+')
     p.add_argument('--allow-boot-change', action='store_true')

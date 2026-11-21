@@ -27,6 +27,10 @@ BUS_PATH = '/org/freedesktop/DBus'
 INTERVAL = 300
 
 
+def valid_interval(seconds):
+    return type(seconds) is int and 10 <= seconds <= 3600
+
+
 def call(bus, destination, path, interface, method, args=None, timeout=5000):
     return bus.call_sync(destination, path, interface, method, args, None,
                          Gio.DBusCallFlags.NO_AUTO_START, timeout, None).unpack()
@@ -115,11 +119,13 @@ class NativeWallpaper:
 
 
 class Worker:
-    def __init__(self, bus, settings, desktop, images, state=None, token=None, mode='rotation'):
-        if mode not in ('rotation', 'motion'):
+    def __init__(self, bus, settings, desktop, images, state=None, token=None, mode='rotation', interval=INTERVAL):
+        if mode not in ('rotation', 'motion', 'motion-cycle'):
             raise ValueError('Unsupported lock wallpaper mode')
+        if not valid_interval(interval):
+            raise ValueError('Lock image interval must be an integer from 10 to 3600 seconds')
         self.bus, self.settings, self.desktop, self.images = bus, settings, desktop, images
-        self.mode = mode
+        self.mode, self.interval = mode, interval
         self.state, self.token = state, token
         self.child = None
         self.locked = False
@@ -171,7 +177,7 @@ class Worker:
             self.save_index()
         else:
             self.index = (self.index + 1) % 3
-        self.next_tick = now + INTERVAL
+        self.next_tick = now + self.interval
 
     def step(self, now):
         try:
@@ -268,9 +274,9 @@ def run(config, action, lock_fd):
         raise ValueError('Images must be distinct')
     for p in images:
         image_uri(p)
-    # Configurations installed before motion support retain their rotation mode.
+    # Older configurations retain their original rotation or single-image behavior.
     worker = Worker(None, None, desktop, images, Path(config['state']), config['token'],
-                    mode=config.get('mode', 'rotation'))
+                    mode=config.get('mode', 'rotation'), interval=config.get('image_interval', INTERVAL))
     if action == '--check':
         subprocess.run([str(helper), '--check', config['desktop_image'], *images], check=True)
         return

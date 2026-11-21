@@ -178,7 +178,8 @@ def install_service(ctx, images, desktop):
             data = json.loads(current)
             if set(data) != {'token', 'next_index'} or data['token'] != token or type(data['next_index']) is not int or not 0 <= data['next_index'] < 3:
                 raise Error('Rotation state changed externally.')
-    text = json.dumps({'mode': 'motion', 'native_helper': str(native), 'desktop_image': str(desktop), 'lock_images': [str(p) for p in images],
+    text = json.dumps({'mode': 'motion-cycle', 'image_interval': getattr(ctx.args, 'lock_image_seconds', 300),
+                       'native_helper': str(native), 'desktop_image': str(desktop), 'lock_images': [str(p) for p in images],
                        'state': str(state), 'token': token, 'lock_path': str(lock_path)}, indent=2) + '\n'
     command = ' '.join(unit_arg(p) for p in ('/usr/bin/python3', worker, config))
     unit_text = ('[Unit]\nDescription=Ina lockscreen wallpaper motion\n'
@@ -256,12 +257,15 @@ def install_service(ctx, images, desktop):
                     original, _, mode = ctx.run_files[state]
                     ctx.run_files[state] = (original, current, mode)
         raise
-    print('Enabled ina-lockscreen.service with continuous GTK wallpaper motion. Active screensavers will be locked immediately.')
+    print('Enabled ina-lockscreen.service with continuous GTK motion and ordered image changes. Active screensavers will be locked immediately.')
     print('An already running Cinnamon screensaver loads the GTK style on its next natural process start; Ina never restarts an existing locker.')
 
 
 def run(ctx):
     # Network downloads are prepared separately by the Bash entry point.
+    interval = getattr(ctx.args, 'lock_image_seconds', 300)
+    if not 10 <= interval <= 3600:
+        raise Error('Lock image interval must be from 10 to 3600 seconds.')
     sources = json.loads(SOURCES.read_text())['images']
     lock_sources = [item for item in sources if item['role'].startswith('lock-')]
     if [item['role'] for item in lock_sources] != ['lock-1', 'lock-2', 'lock-3']:
@@ -270,7 +274,7 @@ def run(ctx):
         print(f"Selected {item['role']}: {item['url']}")
         print(f"Local download name: {item['filename']}")
     print('Live mode explicitly locks each supervised Cinnamon screensaver before selecting the lock wallpaper.')
-    print('Native GTK animates the first approved still continuously; the native helper selects it once per lock. No video is decoded.')
+    print('GTK pans and zooms the current lock image. The native helper cycles the three approved images only while locked.')
     if not ctx.args.images or not ctx.args.image:
         print('Required paths: exactly three approved lock images and one approved static desktop image.')
         if not ctx.dry:
@@ -288,8 +292,9 @@ def run(ctx):
         raise Error('Supply exactly three distinct lock images, including no hard-link duplicates.')
     if (desktop.stat().st_dev, desktop.stat().st_ino) in identities:
         raise Error('The static desktop image must be independent of the lock images.')
-    print('Continuous lock motion image: ' + str(images[0]))
-    print('The other two approved images remain in the configuration for compatibility with previous rotation services.')
+    for index, path in enumerate(images, 1):
+        print(f'Lock image {index}: {path}')
+    print(f'Lock image interval: {interval} seconds')
     print('Restore static desktop: ' + str(desktop))
     if not ctx.test:
         if not ctx.args.force_lock_on_activation:

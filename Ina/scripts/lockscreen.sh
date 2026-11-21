@@ -44,7 +44,8 @@ for argument in "$@"; do
                 'Live setup: --asset-config PATH --approved --force-lock-on-activation --apply --apply-desktop.' \
                 'Lock now with an extended reply timeout: --lock-now [--dry-run]. Unlock normally.' \
                 'This locks the supervised Cinnamon screensaver immediately whenever it becomes active.' \
-                'GTK continuously pans and zooms the first approved still; the desktop stays static.' \
+                'GTK pans and zooms each of the three approved images. The desktop stays static.' \
+                'Optional: --lock-image-seconds 10..3600. The default is 300 seconds.' \
                 'Requires Cinnamon on X11 and GTK animations enabled. Video is not decoded.' \
                 'Use --test-root PATH for isolated simulation.' \
                 'Restore prepared images: restore.sh --component lockscreen-images --apply'
@@ -81,7 +82,7 @@ ina_text "$prepared/assets.json" "$configuration"$'\n' 600
 printf 'Image configuration: %s\n' "$prepared/assets.json"
 if "$INA_DRY"; then printf '%s\n' 'Preview only. Three images would be prepared in the selected order.'
 else printf '%s\n' 'Three images prepared in the selected order.'; fi
-printf '%s\n' 'Live motion uses the first selected still; the remaining paths are retained for compatibility.' \
+printf '%s\n' 'Live motion cycles the three selected images while locked.' \
     'Select an independent static desktop image in assets.json before enabling motion.' \
     'Live setup requires --force-lock-on-activation and locks each supervised Cinnamon screensaver.' \
     'No wallpaper, login-screen setting, service, or boot file was changed.'
