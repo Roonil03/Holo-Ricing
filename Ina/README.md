@@ -8,51 +8,67 @@ See the [installation guide](ina_rice.md) for package setup, image selection, pr
 
 ### Desktop and windows
 
-<p align="center">
-  <a href="screenshots/desktop.png"><img src="screenshots/desktop.png" alt="Ina desktop with clock, calendar, and CPU graph" width="800"></a>
-</p>
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="screenshots/desktop.png"><img src="screenshots/desktop.png" alt="Ina desktop with clock, calendar, and CPU graph" width="400"></a>
+      <p>Desktop with the clock, calendar, and CPU graph. The panel is hidden in this capture. Select the wallpaper separately as described in the installation guide.</p>
+    </td>
+    <td width="50%" valign="top">
+      <a href="screenshots/nemo.png"><img src="screenshots/nemo.png" alt="Ina-themed Nemo showing four sample folders" width="400"></a>
+      <p>Nemo with Ina styling and four temporary sample folders.</p>
+    </td>
+  </tr>
+</table>
 
-Desktop with the clock, calendar, and CPU graph. The panel is hidden in this capture. Select the wallpaper separately as described in the installation guide.
+### Animated cursors
 
-<p align="center">
-  <a href="screenshots/nemo.png"><img src="screenshots/nemo.png" alt="Ina-themed Nemo showing four sample folders" width="800"></a>
-</p>
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="screenshots/cursor.gif"><img src="screenshots/cursor.gif" alt="Recorded animation of the installed desktop Tako cursor at 32 px" width="360"></a>
+      <p>Recorded desktop cursor animation from the installed Tako cursor at 32 px.</p>
+    </td>
+    <td width="50%" valign="top">
+      <a href="screenshots/login-cursor.gif"><img src="screenshots/login-cursor.gif" alt="Recorded animation of the installed login Tako cursor at 40 px in an isolated preview" width="360"></a>
+      <p>Recorded login cursor animation from the installed Tako cursor at 40 px in an isolated preview.</p>
+    </td>
+  </tr>
+</table>
 
-Nemo with Ina styling and four temporary sample folders.
-
-<p align="center">
-  <a href="screenshots/cursor.png"><img src="screenshots/cursor.png" alt="Installed Tako cursor in a preview window" width="500"></a>
-</p>
-
-The installed Tako cursor at 32 px. This optional cursor is credited to NOiiRE in [credits](credits.md). The supported cursor component selects DMZ-White.
+The optional desktop cursor is credited to NOiiRE in [credits](credits.md). The original creator of the separately installed login cursor is [unverified]. The supported cursor component selects DMZ-White.
 
 ### Terminal Takos
 
-<p align="center">
-  <a href="screenshots/fastfetch.png"><img src="screenshots/fastfetch.png" alt="Fastfetch with the large purple and gold Tako artwork" width="800"></a>
-</p>
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="screenshots/fastfetch.png"><img src="screenshots/fastfetch.png" alt="Fastfetch with the large purple and gold Tako artwork" width="400"></a>
+      <p>Fastfetch with the installed large Tako artwork and selected system details.</p>
+    </td>
+    <td width="50%" valign="top">
+      <a href="screenshots/neofetch.png"><img src="screenshots/neofetch.png" alt="Neofetch with the compact purple and gold Tako artwork" width="400"></a>
+      <p>Neofetch with the installed compact Tako artwork.</p>
+    </td>
+  </tr>
+</table>
 
-Fastfetch with the installed large Tako artwork and selected system details.
-
-<p align="center">
-  <a href="screenshots/neofetch.png"><img src="screenshots/neofetch.png" alt="Neofetch with the compact purple and gold Tako artwork" width="800"></a>
-</p>
-
-Neofetch with the installed compact Tako artwork. Identifying fields are omitted from both captures. These optional tools have separate configuration scripts and are excluded from the combined installer.
+Identifying fields are omitted from both captures. These optional tools have separate configuration scripts and are excluded from the combined installer.
 
 ### Boot and login
 
-<p align="center">
-  <a href="screenshots/grub.png"><img src="screenshots/grub.png" alt="Installed Ina GRUB theme preview" width="800"></a>
-</p>
-
-Installed GRUB theme rendered in `grub-emu` with sample menu entries. See the [GRUB instructions](#grub-preparation-and-activation) for preparation and activation.
-
-<p align="center">
-  <a href="screenshots/login-screen.png"><img src="screenshots/login-screen.png" alt="Existing login theme in Slick Greeter test mode" width="800"></a>
-</p>
-
-Existing login-screen appearance in Slick Greeter's test mode, with test accounts. This machine has a separately configured login background and theme. The current login-screen script preserves the existing configuration. Some test-account labels have low contrast against this background.
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="screenshots/grub.png"><img src="screenshots/grub.png" alt="Installed Ina GRUB theme preview" width="400"></a>
+      <p>Installed GRUB theme rendered in <code>grub-emu</code> with sample menu entries. See the <a href="#grub-preparation-and-activation">GRUB instructions</a> for preparation and activation.</p>
+    </td>
+    <td width="50%" valign="top">
+      <a href="screenshots/login-screen.png"><img src="screenshots/login-screen.png" alt="Existing login theme in Slick Greeter test mode" width="400"></a>
+      <p>Existing login-screen appearance in Slick Greeter's test mode, with test accounts. This machine has a separately configured login background and theme. The current login-screen script preserves the existing configuration. Some test-account labels have low contrast against this background.</p>
+    </td>
+  </tr>
+</table>
 
 ### Setup preview
 
