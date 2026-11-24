@@ -1,32 +1,11 @@
-#!/bin/bash
-# 03-neofetch.sh - Installs and configures neofetch with a small Tako ASCII art
-
-echo "Installing Neofetch..."
-sudo apt-get install -y neofetch
-
-# Setup config directories
-mkdir -p ~/.config/neofetch
-
-echo "Copying configs and processing ASCII art..."
-# Check if running from Makefile (root of Ricing) or from scripts dir
-if [ -d "dotfiles" ]; then
-    SRC_DIR="dotfiles"
-else
-    SRC_DIR="../dotfiles"
-fi
-
-# Use the pre-shrunk neofetch art (20x37) so all stats fit side-by-side.
-# Use neofetch-native ${c1}/${c2} color markers (NOT raw ANSI escapes):
-# neofetch strips ${cN} when measuring ascii width, but counts raw
-# escapes as visible chars, which pushes the stats far to the right.
-# Apply Takodachi colors (c1=magenta body, c2=yellow halo)
-cp "$SRC_DIR/tako-ascii-neofetch.txt" /tmp/tako-ascii.txt
-sed -i 's/^/${c1}/' /tmp/tako-ascii.txt
-sed -i 's/:/${c2}:${c1}/g' /tmp/tako-ascii.txt
-cp /tmp/tako-ascii.txt ~/.config/neofetch/tako-ascii.txt
-
-# Configure Neofetch (full stats to match fastfetch modules)
-cat << 'EOF' > ~/.config/neofetch/config.conf
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib/shell-common.sh"
+ina_init neofetch "$@"
+ina_need neofetch
+art="$(sed 's/^/${c1}/; s/:/${c2}:${c1}/g' "$SCRIPT_DIR/../dotfiles/tako-ascii-neofetch.txt")"
+config="$(cat <<'CONFIG'
 print_info() {
     info title
     info underline
@@ -57,22 +36,19 @@ print_info() {
     prin "" "\e[33mIna Ina Ina, Ina Ina!\e[0m"
 }
 image_backend="ascii"
-image_source="$HOME/.config/neofetch/tako-ascii.txt"
+image_source=__INA_IMAGE_PATH__
 ascii_distro="auto"
 ascii_colors=(5 3)
 ascii_bold="on"
 gap=2
 colors=(5 5 5 5 5 7)
-EOF
-
-# Terminal startup stays fastfetch-only: remove any neofetch autostart.
-# (Run neofetch manually with the `neofetch` command.)
-if grep -q "^neofetch" ~/.bashrc; then
-    sed -i '/^neofetch$/d' ~/.bashrc
-    echo "Removed neofetch from ~/.bashrc (fastfetch stays the default)"
-fi
-if grep -q "# Run neofetch on startup" ~/.bashrc; then
-    sed -i '/# Run neofetch on startup/d' ~/.bashrc
-fi
-
-echo "Neofetch configured! Run 'neofetch' manually to see the small Takodachi."
+CONFIG
+)"
+# The config is a shell script: quote the chosen path as a shell literal.
+printf -v image_path '%q' "$INA_CONFIG/neofetch/tako-ascii.txt"
+config="${config%%__INA_IMAGE_PATH__*}${image_path}${config#*__INA_IMAGE_PATH__}"
+ina_begin
+ina_text "$INA_CONFIG/neofetch/config.conf" "$config"$'\n'
+ina_text "$INA_CONFIG/neofetch/tako-ascii.txt" "$art"$'\n'
+ina_finish
+printf '%s\n' 'Neofetch configured. Run neofetch manually.'

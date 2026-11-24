@@ -1,0 +1,483 @@
+"""Original MIT project code. Narrow, reversible component transactions."""
+import argparse
+import ast
+import base64
+import fcntl
+import importlib.util
+import json
+import os
+import re
+from pathlib import Path
+import shlex
+import signal
+import shutil
+import stat
+import subprocess
+import sys
+import tempfile
+
+
+class Error(Exception):
+    pass
+
+
+class Interrupted(Error):
+    def __init__(self, number):
+        super().__init__(f'Interrupted by signal {number}; recovery was attempted.')
+        self.status = 128 + number
+
+
+def interrupt(number, _frame):
+    raise Interrupted(number)
+
+
+def checked(command, env=None):
+    if not shutil.which(command[0]):
+        raise Error(f"Required command missing: {command[0]}")
+    result = subprocess.run(command, text=True, capture_output=True, env=env)
+    if result.returncode:
+        raise Error(f"{shlex.join(command)} failed: {result.stderr.strip()}")
+    return result.stdout.strip()
+
+
+def reject_links(path):
+    path = Path(path).absolute()
+    for part in (path, *path.parents):
+        if part.is_symlink():
+            raise Error(f"Refusing symbolic link: {part}")
+    return path.resolve(strict=False)
+
+
+def atomic(path, data, mode=0o600):
+    path = reject_links(path)
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    fd, name = tempfile.mkstemp(prefix='.ina-', dir=path.parent)
+    try:
+        with os.fdopen(fd, 'wb') as stream:
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.chmod(name, mode)
+        os.replace(name, path)
+    finally:
+        if os.path.exists(name):
+            os.unlink(name)
+
+
+def variant(value):
+    if isinstance(value, bool):
+        return str(value).lower()
+    # GLib string escaping, independent of shell syntax.
+    if isinstance(value, str):
+        return "'" + value.replace('\\', '\\\\').replace("'", "\\'") + "'"
+    if isinstance(value, list):
+        return '[' + ', '.join(variant(x) for x in value) + ']'
+    return str(value)
+
+
+class Context:
+    def __init__(self, args):
+        self.args = args
+        self.dry = not args.apply or args.dry_run
+        self.test = Path(args.test_root).absolute() if args.test_root else None
+        if self.test:
+            self.test = reject_links(self.test)
+            if not str(self.test).startswith('/tmp/') or not self.test.is_dir():
+                raise Error('--test-root must be an existing real directory beneath /tmp')
+        self.home = self.test / 'home' if self.test else Path.home()
+        self.config = self.home / '.config' if self.test else Path(os.environ.get('XDG_CONFIG_HOME', self.home / '.config'))
+        self.data = self.home / '.local/share' if self.test else Path(os.environ.get('XDG_DATA_HOME', self.home / '.local/share'))
+        self.state = self.test / 'state' if self.test else Path(os.environ.get('XDG_STATE_HOME', self.home / '.local/state')) / 'ina'
+        self.home = reject_links(self.home)
+        self.config = reject_links(self.config)
+        self.data = reject_links(self.data)
+        self.state = reject_links(self.state)
+        for path in (self.config, self.data):
+            if not path.is_relative_to(self.home):
+                raise Error(f'Configuration path is outside the user directory: {path}')
+        if not self.test and not self.state.is_relative_to(self.home):
+            raise Error('State directory must be beneath the user directory.')
+        self.name = args.component
+        if not re.fullmatch(r'[a-z][a-z-]*', self.name):
+            raise Error('Invalid component name.')
+        self.manifest_path = self.state / 'backups' / self.name / 'manifest.json'
+        reject_links(self.manifest_path)
+        self.manifest = json.loads(self.manifest_path.read_text()) if self.manifest_path.exists() else {'component': self.name, 'files': {}, 'settings': {}}
+        self.palette = {key[4:]: value for key, value in os.environ.items() if key.startswith('INA_')}
+        self.guard = None
+        self.run_files = {}
+        self.run_settings = {}
+        self.run_directories = set()
+        self.manifest_before = None
+
+    def acquire(self):
+        if self.dry:
+            return
+        reject_links(self.state)
+        self.state.mkdir(parents=True, exist_ok=True, mode=0o700)
+        os.chmod(self.state, 0o700)
+        lock = reject_links(self.state / 'transaction.lock')
+        self.guard = open(lock, 'a', encoding='utf-8')
+        os.chmod(lock, 0o600)
+        try:
+            fcntl.flock(self.guard, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise Error('Another Ina operation is running.') from exc
+        # Reload only after acquiring the lock.
+        if self.manifest_path.exists():
+            self.manifest_before = self.manifest_path.read_bytes()
+            self.manifest = json.loads(self.manifest_before)
+
+    def rollback_run(self):
+        # Refuse to replace concurrent edits, even during failure recovery.
+        for path, (original, applied, mode) in self.run_files.items():
+            reject_links(path)
+            current = path.read_bytes() if path.exists() else None
+            if current not in (original, applied):
+                raise Error(f'File changed during failed operation: {path}')
+        for (schema, key), (original, applied) in self.run_settings.items():
+            if self.get(schema, key) not in (original, applied):
+                raise Error(f'Setting changed during failed operation: {schema}/{key}')
+        for path, (original, applied, mode) in reversed(list(self.run_files.items())):
+            if original is None:
+                path.unlink(missing_ok=True)
+            else:
+                atomic(path, original, mode)
+        for (schema, key), (original, applied) in self.run_settings.items():
+            self.put(schema, key, original)
+        if self.manifest_before is None:
+            self.manifest_path.unlink(missing_ok=True)
+        else:
+            atomic(self.manifest_path, self.manifest_before)
+        for path in sorted(self.run_directories, key=lambda p: len(p.parts), reverse=True):
+            if path.is_dir() and not any(path.iterdir()):
+                path.rmdir()
+
+    def save(self):
+        atomic(self.manifest_path, (json.dumps(self.manifest, indent=2) + '\n').encode())
+
+    def get(self, schema, key):
+        if self.test:
+            path = self.test / 'settings.json'
+            values = json.loads(path.read_text()) if path.exists() else {}
+            if schema + '/' + key in values:
+                return values[schema + '/' + key]
+        return checked(['gsettings', 'get', schema, key], env=dict(os.environ, GSETTINGS_BACKEND='memory') if self.test else None)
+
+    def value(self, schema, key):
+        text = self.get(schema, key)
+        if text.startswith('@as '):
+            text = text[4:]
+        return ast.literal_eval(text)
+
+    def put(self, schema, key, value):
+        if self.test:
+            path = self.test / 'settings.json'
+            values = json.loads(path.read_text()) if path.exists() else {}
+            values[schema + '/' + key] = value
+            atomic(path, json.dumps(values, indent=2).encode())
+        else:
+            checked(['gsettings', 'set', schema, key, value])
+
+    def setting(self, schema, key, value):
+        wanted = variant(value)
+        current = self.get(schema, key)  # Missing keys fail before mutation.
+        # Check installed schema type and range without modifying any settings.
+        from gi.repository import Gio, GLib
+        schema_object = Gio.SettingsSchemaSource.get_default().lookup(schema, True)
+        if schema_object is None or not schema_object.has_key(key):
+            raise Error(f'Installed settings schema is missing {schema}/{key}.')
+        schema_key = schema_object.get_key(key)
+        candidate = GLib.Variant.parse(schema_key.get_value_type(), wanted, None, None)
+        if not schema_key.range_check(candidate):
+            raise Error(f'Unsupported value for {schema}/{key}: {wanted}')
+        print(f'{schema}/{key} = {wanted}')
+        if self.dry or current == wanted:
+            return
+        identity = schema + '/' + key
+        existing = self.manifest['settings'].get(identity)
+        if existing and current not in (existing['original'], existing['applied']):
+            raise Error(f'Setting changed since application: {identity}')
+        self.run_settings[(schema, key)] = (self.run_settings.get((schema, key), (current, wanted))[0], wanted)
+        entry = self.manifest['settings'].setdefault(identity, {'schema': schema, 'key': key, 'original': current})
+        entry['applied'] = wanted
+        self.save()  # Persist recovery before changing anything.
+        self.put(schema, key, wanted)
+
+    def file(self, path, content, mode=None, block=None):
+        path = reject_links(path)
+        if self.test and not path.is_relative_to(self.test):
+            raise Error(f'Test attempted to escape its directory: {path}')
+        if not self.test and not path.is_relative_to(self.home):
+            raise Error(f'Only user files may be written: {path}')
+        if path.exists() and not path.is_file():
+            raise Error(f'Expected a regular file: {path}')
+        if isinstance(content, str):
+            content = content.encode()
+        current = path.read_bytes() if path.exists() else None
+        print(f'File: {path}')
+        if self.dry or current == content:
+            return
+        existing = self.manifest['files'].get(str(path))
+        if existing and not block:
+            encoded = base64.b64encode(current).decode() if current is not None else None
+            if encoded not in (existing['original'], existing['applied']):
+                raise Error(f'File changed since application: {path}')
+        before = self.run_files.get(path, (current, None, stat.S_IMODE(path.stat().st_mode) if path.exists() else 0o600))
+        self.run_files[path] = (before[0], content, before[2])
+        directory = path.parent
+        while not directory.exists() and directory != self.home.parent:
+            self.run_directories.add(directory)
+            directory = directory.parent
+        entry = self.manifest['files'].setdefault(str(path), {
+            'original': base64.b64encode(current).decode() if current is not None else None,
+            'mode': stat.S_IMODE(path.stat().st_mode) if path.exists() else None,
+        })
+        entry['applied'] = base64.b64encode(content).decode()
+        if block:
+            entry.setdefault('block_original', block['original'])
+            entry['block_marker'] = block['marker']
+            entry['block_applied'] = block['applied']
+        self.save()
+        atomic(path, content, mode if mode is not None else entry['mode'] or 0o600)
+
+    def block(self, path, marker, content):
+        path = reject_links(path)
+        text = path.read_text() if path.exists() else ''
+        pattern = block_pattern(marker)
+        matches = list(re.finditer(pattern, text, flags=re.DOTALL))
+        if len(matches) > 1:
+            raise Error(f'Duplicate owned CSS blocks in {path}')
+        original = matches[0].group() if matches else ''
+        wanted = '\n' + content
+        result = re.sub(pattern, lambda match: wanted, text, flags=re.DOTALL) if matches else text + wanted
+        self.file(path, result, block={'original': original, 'marker': marker, 'applied': wanted})
+
+    def recover(self):
+        print('Recovery: ' + shlex.join(['bash', str(Path(__file__).parents[1] / 'restore.sh'), '--component', self.name, '--apply']))
+        print(f'Backup: {self.manifest_path}')
+        if self.name in ('window-controls', 'taskbar', 'widgets', 'cursor', 'animations'):
+            print('Text-console recovery: ' + shlex.join(['dbus-run-session', '--', 'bash', str(Path(__file__).parents[1] / 'restore.sh'), '--component', self.name, '--apply']))
+
+
+def block_pattern(marker):
+    return r'\n?/\* ' + re.escape(marker) + r' begin \*/.*?/\* ' + re.escape(marker) + r' end \*/\n?'
+
+
+def live_rotation_count(manifest):
+    # Backups created before playlists were configurable always held three images.
+    count = manifest.get('live_rotation', {}).get('image_count', 3)
+    if type(count) is not int or not 3 <= count <= 8:
+        raise Error('Invalid live rotation playlist size in backup.')
+    return count
+
+
+def live_rotation_restore(ctx, manifest):
+    details = manifest.get('live_rotation')
+    if not details:
+        return None
+    path = reject_links(details['path'])
+    if path != ctx.state / 'lock-rotation-live.json':
+        raise Error('Unexpected live rotation state path in backup.')
+    original = details['original']
+    original = base64.b64decode(original, validate=True) if original is not None else None
+    mode = details['mode']
+    if not isinstance(mode, int) or isinstance(mode, bool) or not 0 <= mode <= 0o777:
+        raise Error('Invalid live rotation backup permissions.')
+    current = path.read_bytes() if path.exists() else None
+    if current is None and original is not None:
+        raise Error('Live rotation state was removed outside Ina; preserve the backup before restoring.')
+    if current is not None and current != original:
+        state = json.loads(current)
+        if (not isinstance(state, dict) or set(state) != {'token', 'next_index'} or
+                state['token'] != details['token'] or type(state['next_index']) is not int or
+                not 0 <= state['next_index'] < live_rotation_count(manifest)):
+            raise Error('Live rotation state changed outside Ina; preserve it before restoring.')
+    return path, original, mode
+
+
+def restore(ctx, component):
+    path = reject_links(ctx.state / 'backups' / component / 'manifest.json')
+    if not path.exists():
+        print(f'No backup for {component}; nothing to restore.')
+        return
+    manifest = json.loads(path.read_text())
+    if component == 'gaming-mode':
+        from components.gaming_legacy import restore_run
+        ctx.manifest, ctx.manifest_path = manifest, path
+        restore_run(ctx)
+        return
+    live_rotation = live_rotation_restore(ctx, manifest) if component == 'lockscreen' else None
+    extra = None
+    if component == 'firefox':
+        from components.firefox import prepare_restore
+        extra = prepare_restore(ctx, manifest)
+    # Validate the entire backup before making any restoration changes.
+    blocks = {}
+    for name, entry in manifest['files'].items():
+        file = reject_links(name)
+        rotation_lock = component == 'lockscreen' and file == ctx.state / 'lock-rotation-live.lock'
+        if not file.is_relative_to(ctx.home) and not rotation_lock:
+            raise Error(f'Backup contains a path outside the user directory: {file}')
+        current = base64.b64encode(file.read_bytes()).decode() if file.exists() else None
+        if 'block_marker' in entry:
+            # Keep unrelated CSS line endings and text exact when removing a
+            # managed block; text-mode newline conversion would alter them.
+            text = file.read_bytes().decode('utf-8') if file.exists() else ''
+            pattern = block_pattern(entry['block_marker'])
+            matches = list(re.finditer(pattern, text, flags=re.DOTALL))
+            if len(matches) > 1 or (matches[0].group() if matches else '') not in (entry['block_original'], entry['block_applied']):
+                raise Error(f'Owned CSS block changed since application: {file}')
+            result = re.sub(pattern, lambda match: entry['block_original'], text, flags=re.DOTALL)
+            blocks[name] = result
+            continue
+        if current not in (entry['original'], entry['applied']):
+            raise Error(f'File changed since Ina applied it; preserve it manually first: {file}')
+    for entry in manifest['settings'].values():
+        if ctx.get(entry['schema'], entry['key']) not in (entry['original'], entry['applied']):
+            raise Error(f"Setting changed since application: {entry['schema']}/{entry['key']}")
+    if extra and extra[0].exists():
+        print(f'Restore owned Firefox preferences: {extra[0]}')
+        if not ctx.dry:
+            atomic(extra[0], extra[1].encode(), stat.S_IMODE(extra[0].stat().st_mode))
+    if component == 'lockscreen' and 'rotation_original' in manifest:
+        rotation = reject_links(ctx.state / 'lock-rotation.json')
+        current = rotation.read_text() if rotation.exists() else None
+        if current not in (manifest['rotation_original'], manifest['rotation_applied']):
+            raise Error('Rotation state changed externally; inspect it before restoring.')
+        if not ctx.dry:
+            if manifest['rotation_original'] is None:
+                rotation.unlink(missing_ok=True)
+            else:
+                atomic(rotation, manifest['rotation_original'].encode())
+    if live_rotation and not ctx.dry:
+        state_path, original, mode = live_rotation
+        if original is None:
+            state_path.unlink(missing_ok=True)
+        else:
+            atomic(state_path, original, mode)
+    for name, entry in manifest['files'].items():
+        print(f'Restore: {name}')
+        if not ctx.dry:
+            if name in blocks:
+                if entry['original'] is None and not blocks[name]:
+                    Path(name).unlink(missing_ok=True)
+                else:
+                    atomic(Path(name), blocks[name].encode(), entry['mode'] or 0o600)
+            elif entry['original'] is None:
+                Path(name).unlink(missing_ok=True)
+            else:
+                atomic(Path(name), base64.b64decode(entry['original']), entry['mode'])
+    for entry in manifest['settings'].values():
+        print(f"Restore: {entry['schema']}/{entry['key']} = {entry['original']}")
+        if not ctx.dry:
+            ctx.put(entry['schema'], entry['key'], entry['original'])
+
+
+def parser():
+    p = argparse.ArgumentParser(description='Preview by default. Select --apply explicitly.')
+    p.add_argument('component')
+    p.add_argument('--dry-run', action='store_true')
+    p.add_argument('--apply', action='store_true')
+    p.add_argument('--archive-backup', action='store_true', help=argparse.SUPPRESS)
+    p.add_argument('--apply-desktop', action='store_true')
+    p.add_argument('--test-root')
+    p.add_argument('--component', dest='restore_component')
+    p.add_argument('--settings')
+    p.add_argument('--profile')
+    p.add_argument('--user-chrome', action='store_true')
+    p.add_argument('--image')
+    p.add_argument('--images', nargs='+', metavar='PATH', help='3 to 8 ordered lock images (legacy three-image configurations are supported)')
+    p.add_argument('--asset-config')
+    p.add_argument('--simulate-events', nargs='+', choices=['locked', 'tick', 'unlocked', 'lost-session', 'exit'])
+    p.add_argument('--approved', action='store_true')
+    p.add_argument('--force-lock-on-activation', action='store_true')
+    p.add_argument('--lock-image-seconds', type=int, metavar='10..3600', default=300)
+    p.add_argument('--widgets', nargs='+')
+    p.add_argument('--components', nargs='+')
+    p.add_argument('--allow-boot-change', action='store_true')
+    p.add_argument('--power-profile', choices=['power-saver', 'balanced', 'performance'])
+    return p
+
+
+def main():
+    # Separate launch arguments so flags before -- are parsed normally.
+    argv = sys.argv[1:]
+    command = []
+    if '--' in argv:
+        boundary = argv.index('--')
+        argv, command = argv[:boundary], argv[boundary + 1:]
+    p = parser()
+    args = p.parse_args(argv)
+    args.command = command
+    if args.asset_config:
+        asset_path = reject_links(Path(args.asset_config).expanduser())
+        assets = json.loads(asset_path.read_text())
+        args.image = args.image or assets.get('desktop_image')
+        args.images = args.images or assets.get('lock_images')
+        if args.images is not None and (not isinstance(args.images, list) or not 3 <= len(args.images) <= 8):
+            raise Error('Asset configuration must specify 3 to 8 ordered lock image paths.')
+        # Approval requires the explicit command-line flag, not a file field.
+    ctx = Context(args)
+    if args.component == 'restore':
+        if not args.restore_component:
+            directory = ctx.state / 'backups'
+            print('\n'.join(x.name for x in directory.iterdir()) if directory.exists() else 'No backups.')
+            return
+        if not args.restore_component.replace('-', '').isalnum():
+            raise Error('Invalid component name.')
+        ctx.acquire()
+        restore(ctx, args.restore_component)
+        if args.archive_backup and not ctx.dry:
+            path = reject_links(ctx.state / 'backups' / args.restore_component / 'manifest.json')
+            if path.exists():
+                archive = path.with_name('manifest.python-restored.json')
+                if archive.exists():
+                    raise Error('Prior archived Python backup exists; preserve it before retrying.')
+                path.rename(archive)
+        return
+    component = Path(__file__).parent / 'components' / (args.component.replace('-', '_') + '.py')
+    if not component.is_file():
+        raise Error(f'Unknown component: {args.component}')
+    spec = importlib.util.spec_from_file_location('component', component)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    if getattr(module, 'DESKTOP', False) and not ctx.dry and not ctx.test and not args.apply_desktop:
+        raise Error('Changing desktop settings requires both --apply and --apply-desktop.')
+    if not ctx.test and not ctx.dry and os.geteuid() == 0:
+        raise Error('Run as your desktop user, not root.')
+    if getattr(module, 'DESKTOP', False) and not ctx.test and not ctx.dry:
+        mint = Path('/etc/linuxmint/info')
+        if not mint.is_file() or 'RELEASE=22.3' not in mint.read_text() or checked(['cinnamon', '--version']) != 'Cinnamon 6.6.9':
+            raise Error('This component is tested only on Linux Mint 22.3 with Cinnamon 6.6.9.')
+        if 'Cinnamon' not in os.environ.get('XDG_CURRENT_DESKTOP', '') or os.environ.get('XDG_SESSION_TYPE') != 'x11':
+            raise Error('Apply desktop components from the tested Cinnamon X11 session.')
+    ctx.acquire()
+    ctx.recover()
+    try:
+        module.run(ctx)
+    except BaseException:
+        if not ctx.dry:
+            try:
+                ctx.rollback_run()
+                callback = getattr(ctx, 'rollback_callback', None)
+                if callback is not None:
+                    callback()
+            except (Error, OSError, ValueError, subprocess.SubprocessError) as recovery_error:
+                print(f'Automatic recovery failed: {recovery_error}', file=sys.stderr)
+                ctx.recover()
+        raise
+
+
+if __name__ == '__main__':
+    sys.modules['engine'] = sys.modules[__name__]
+    for number in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+        signal.signal(number, interrupt)
+    try:
+        main()
+    except Interrupted as error:
+        print(f'Error: {error}', file=sys.stderr)
+        sys.exit(error.status)
+    except (Error, OSError, ValueError, KeyError, ImportError, TypeError) as error:
+        print(f'Error: {error}', file=sys.stderr)
+        sys.exit(1)

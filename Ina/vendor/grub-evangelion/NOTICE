@@ -1,0 +1,15 @@
+Adapted from Evangelion by Aleph1-9012.
+Original repository: https://github.com/Aleph1-9012/Evangelion
+Reference listing: https://www.gnome-look.org/p/2370768
+Retrieved 2026-10-08 at fb785c3009a9346173d4b893d6aa36dd22052335.
+License: Apache-2.0, retained in LICENSE.
+Reused source paths:
+  themes/eva01/1080p/theme.txt (boot_menu and terminal layout only, modified)
+  themes/eva01/1080p/selectors/selected_c.png (unchanged)
+  themes/eva01/1080p/selectors/selected_e.png (unchanged)
+  themes/eva01/1080p/selectors/selected_w.png (unchanged)
+Modifications are described in theme.txt.in. No Evangelion character artwork,
+wallpaper, font, installer, generated graphic, or GRUB module is included.
+The upstream artwork notice describes selection indicators as derived from
+artwork supplied for the Apache-2.0 project. These three dark card pieces
+remain under that project's terms. No third-party font is copied.
