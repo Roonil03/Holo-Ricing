@@ -2,8 +2,6 @@
 
 | Component | Source | Link |
 | --- | --- | --- |
-| README desktop screenshot | Captured from the installed Cinnamon desktop; user-selected wallpaper, original creator [unverified] | [Desktop screenshot](screenshots/desktop.png) |
-| README Nemo and setup screenshots | Captured from the installed Nemo theme and project installer preview | [Nemo screenshot](screenshots/nemo.png), [setup screenshot](screenshots/setup.png) |
 | Desktop wallpaper used by `desktop-bg.sh` | Alpha Coders / Wallpaper Abyss, artist BoYiMa | [Source page](https://wall.alphacoders.com/big.php?i=1279500), [image URL](https://images8.alphacoders.com/127/1279500.png) |
 | Login background used by `login_screen.sh` | GoodFon, uploader Radjah; original creator [unverified] | [Source page](https://anime.goodfon.com/senen/wallpaper-virtual-youtuber-hololive-ninomae-ina-nis-puzyri-anime-ulybk.html), [image URL](https://img.goodfon.com/original/3840x2160/1/4a/virtual-youtuber-hololive-ninomae-ina-nis-puzyri-anime-ulybk.jpg) |
 | Tako Takover GIF used by `bootlogo.sh` | Tenor, uploader leotsukinaga; original creator [unverified] | [Source page](https://tenor.com/view/tako-takover-ninomae-ina%27nis-ina-tellingbones-gif-47160874351700641), [GIF URL](https://media.tenor.com/AKeMkLsHqqEAAAAi/tako-takover-ninomae-ina%27nis.gif) |

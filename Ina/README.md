@@ -18,6 +18,18 @@ Selective installer preview using `bash Ina/scripts/install.sh --dry-run`. The m
 
 ![Ina selective installer dry-run output](screenshots/setup.png)
 
+Installed GRUB theme rendered in `grub-emu` with sample menu entries. See the [GRUB instructions](#grub-preparation-and-activation) for preparation and activation.
+
+![Installed Ina GRUB theme preview](screenshots/grub.png)
+
+The installed Tako cursor at 32 px. This optional cursor is credited to NOiiRE in [credits](credits.md). The supported cursor component selects DMZ-White.
+
+![Installed Tako cursor in a preview window](screenshots/cursor.png)
+
+Existing login-screen appearance in Slick Greeter's test mode, with test accounts. This machine has a separately configured login background and theme. The current login-screen script preserves the existing configuration. Some test-account labels have low contrast against this background.
+
+![Existing login theme in Slick Greeter test mode](screenshots/login-screen.png)
+
 ## Environment and dependencies
 
 Live desktop application requires Linux Mint 22.3, Cinnamon 6.6.9, and a Cinnamon X11 session. Components check these values and refuse other environments. Run component scripts as the desktop user. The combined runner can route a sudo invocation back to that user and has a separate privileged GRUB helper. No component installs packages or restarts the desktop or computer. Sources: [Bash helpers](scripts/lib/shell-common.sh), [Python engine](scripts/lib/engine.py), and [runner](ina_rice.sh).
