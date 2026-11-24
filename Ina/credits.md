@@ -2,6 +2,8 @@
 
 | Component | Source | Link |
 | --- | --- | --- |
+| README desktop screenshot | Captured from the installed Cinnamon desktop; user-selected wallpaper, original creator [unverified] | [Desktop screenshot](screenshots/desktop.png) |
+| README Nemo and setup screenshots | Captured from the installed Nemo theme and project installer preview | [Nemo screenshot](screenshots/nemo.png), [setup screenshot](screenshots/setup.png) |
 | Desktop wallpaper used by `desktop-bg.sh` | Alpha Coders / Wallpaper Abyss, artist BoYiMa | [Source page](https://wall.alphacoders.com/big.php?i=1279500), [image URL](https://images8.alphacoders.com/127/1279500.png) |
 | Login background used by `login_screen.sh` | GoodFon, uploader Radjah; original creator [unverified] | [Source page](https://anime.goodfon.com/senen/wallpaper-virtual-youtuber-hololive-ninomae-ina-nis-puzyri-anime-ulybk.html), [image URL](https://img.goodfon.com/original/3840x2160/1/4a/virtual-youtuber-hololive-ninomae-ina-nis-puzyri-anime-ulybk.jpg) |
 | Tako Takover GIF used by `bootlogo.sh` | Tenor, uploader leotsukinaga; original creator [unverified] | [Source page](https://tenor.com/view/tako-takover-ninomae-ina%27nis-ina-tellingbones-gif-47160874351700641), [GIF URL](https://media.tenor.com/AKeMkLsHqqEAAAAi/tako-takover-ninomae-ina%27nis.gif) |
@@ -20,7 +22,7 @@
 | gTile extension used by `tiling-window.sh` | Linux Mint Cinnamon Spices, gTile@shuairan | [gTile source](https://github.com/linuxmint/cinnamon-spices-extensions/tree/master/gTile%40shuairan) |
 | xcursorgen used by `login_screen.sh` | X.Org, freedesktop.org | [xcursorgen source](https://gitlab.freedesktop.org/xorg/app/xcursorgen) |
 | Electroharmonix font used by `login_screen.sh` | Raymond Larabie / Typodermic Fonts, DaFont | [Electroharmonix](https://www.dafont.com/electroharmonix.font) |
-| Local Ninomae Ina'nis cursor archive used by `cursor-toggle.sh` | User-provided Downloads archive; original source and creator [unverified] | [Archive reference](scripts/cursor-toggle.sh) |
+| Ninomae Ina'nis cursor used by the `WAH` alias | NOiiRE, Ko-fi | [Ninomae Ina'nis Cursor](https://ko-fi.com/s/834e0843f7) |
 | Takodachi text artwork used by `fastfetch.sh` and `neofetch.sh` | Existing project dotfiles; original source and creator [unverified] | [Fastfetch artwork](dotfiles/tako-ascii.txt), [Neofetch artwork](dotfiles/tako-ascii-neofetch.txt) |
 | GRUB background, Alpha Coders wallpaper 1123929 | mistimagi, Alpha Coders | [Original wallpaper](https://wall.alphacoders.com/big.php?i=1123929), [selected JPEG](https://images3.alphacoders.com/112/1123929.jpg) |
 | GRUB menu layout and three dark selection pieces | Aleph1-9012, Evangelion | [Reference design](https://www.gnome-look.org/p/2370768), [original menu](https://github.com/Aleph1-9012/Evangelion/blob/fb785c3009a9346173d4b893d6aa36dd22052335/themes/eva01/1080p/theme.txt), [selection pieces](https://github.com/Aleph1-9012/Evangelion/tree/fb785c3009a9346173d4b893d6aa36dd22052335/themes/eva01/1080p/selectors) |
