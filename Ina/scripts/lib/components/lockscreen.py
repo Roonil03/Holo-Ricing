@@ -123,6 +123,46 @@ def unit_arg(value):
     return '"' + value + '"'
 
 
+def desktop_arg(value):
+    # Exec quoting is decoded after desktop-entry string escaping. Percent
+    # signs must also survive the desktop launcher's field-code expansion.
+    value = str(value)
+    if any(c in value for c in ('\n', '\r', '\0')):
+        raise Error('Invalid path for desktop autostart.')
+    value = ''.join('\\' + c if c in '\\"`$' else c for c in value)
+    return '"' + value.replace('\\', '\\\\').replace('\t', '\\t').replace('%', '%%') + '"'
+
+
+def session_startup(ctx):
+    """Prepare startup files before stopping a worker or changing files."""
+    session = reject_links(ctx.data / 'ina/lockscreen/lockscreen-session.sh')
+    autostart = reject_links(ctx.config / 'autostart/ina-lockscreen.desktop')
+    condition = reject_links(ctx.config / 'systemd/user/ina-lockscreen.service.d/10-session.conf')
+    for path in (session, autostart, condition):
+        entry = ctx.manifest['files'].get(str(path))
+        if path.exists() and not entry:
+            raise Error(f'Refusing to replace an unowned lockscreen startup file: {path}')
+        if entry:
+            current = base64.b64encode(path.read_bytes()).decode() if path.exists() else None
+            if current not in (entry['original'], entry['applied']):
+                raise Error(f'File changed since application: {path}')
+    session_bytes = (Path(__file__).resolve().parents[1] / 'lockscreen-session.sh').read_bytes()
+    autostart_text = ('[Desktop Entry]\nType=Application\nName=Ina lockscreen motion\n'
+                      f'Exec=/bin/bash {desktop_arg(session)}\nOnlyShowIn=X-Cinnamon;\n'
+                      'NoDisplay=true\nTerminal=false\n')
+    condition_path = unit_arg(session).replace('$', '$$')
+    condition_text = f'[Service]\nExecCondition=/bin/bash {condition_path} --check-session\n'
+    return session, session_bytes, autostart, autostart_text, condition, condition_text
+
+
+def install_session_startup(ctx):
+    """Repair login persistence without disturbing an already running worker."""
+    session, session_bytes, autostart, autostart_text, condition, condition_text = session_startup(ctx)
+    ctx.file(session, session_bytes, 0o700)
+    ctx.file(autostart, autostart_text, 0o600)
+    ctx.file(condition, condition_text, 0o600)
+
+
 def native_binary(ctx, name):
     """Build before touching the running service; preview never invokes cc."""
     source = Path(__file__).resolve().parents[3] / 'src' / (name + '.c')
@@ -192,6 +232,7 @@ def install_service(ctx, images, desktop):
             raise Error('Rotation lock must be an empty private user-owned file.')
     if unit.exists() and str(unit) not in ctx.manifest['files']:
         raise Error(f'Refusing to replace an unowned service unit: {unit}')
+    session_startup(ctx)
     prior = ctx.manifest.get('live_rotation')
     token = prior['token'] if prior else secrets.token_hex(16)
     initialize_state = not prior
@@ -282,6 +323,7 @@ def install_service(ctx, images, desktop):
         ctx.file(native, binary, 0o700)
         ctx.file(config, text, 0o600)
         ctx.file(unit, unit_text, 0o600)
+        install_session_startup(ctx)
         ctx.file(style, style_bytes, 0o600)
         ctx.file(gtk_css, gtk_text, block=style_block)
         retire_python_worker(ctx, old_worker)
