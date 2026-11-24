@@ -2,6 +2,22 @@
 
 Ina configures a purple and parchment Cinnamon desktop using the palette in [colors.sh](dotfiles/colors.sh). Run examples from the repository root. The component scripts preview by default; the [combined runner](ina_rice.md) documents `ina.sh`, which applies by default unless `--dry-run` is present.
 
+## Screenshots
+
+See the [installation guide](ina_rice.md) for package setup, image selection, preview, and application. The example wallpaper below is selected separately, as described in that guide.
+
+Desktop with the clock, calendar, and CPU graph. The panel is hidden in this capture.
+
+![Ina desktop with clock, calendar, and CPU graph](screenshots/desktop.png)
+
+Nemo with Ina styling and four temporary sample folders.
+
+![Ina-themed Nemo showing four sample folders](screenshots/nemo.png)
+
+Selective installer preview using `bash Ina/scripts/install.sh --dry-run`. The menu lists the available components.
+
+![Ina selective installer dry-run output](screenshots/setup.png)
+
 ## Environment and dependencies
 
 Live desktop application requires Linux Mint 22.3, Cinnamon 6.6.9, and a Cinnamon X11 session. Components check these values and refuse other environments. Run component scripts as the desktop user. The combined runner can route a sudo invocation back to that user and has a separate privileged GRUB helper. No component installs packages or restarts the desktop or computer. Sources: [Bash helpers](scripts/lib/shell-common.sh), [Python engine](scripts/lib/engine.py), and [runner](ina_rice.sh).
